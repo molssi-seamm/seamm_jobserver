@@ -1,0 +1,7 @@
+seamm_jobserver
+===============
+
+.. toctree::
+   :maxdepth: 4
+
+   seamm_jobserver
