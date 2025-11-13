@@ -659,12 +659,15 @@ class JobServer(collections.abc.MutableMapping):
 
         self.logger.debug(f"cmd for {job_id}: {cmd}")
 
-        os.environ["SEAMM_JOB_ID"] = str(job_id)
-        os.environ["SEAMM_JOBSERVER"] = self.options["name"]
+        # Create a copy of the current environment with job-specific variables
+        env = os.environ.copy()
+        env["SEAMM_JOB_ID"] = str(job_id)
+        env["SEAMM_JOBSERVER"] = self.options["name"]
 
         process = psutil.Popen(
             cmd,
             cwd=wdir,
+            env=env,  # Pass the job-specific environment
             close_fds=True,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
