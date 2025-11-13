@@ -5,6 +5,10 @@ History
    * Added SEAMM_JOBSERVER and SEAMM_JOB_ID environment variables so that jobs can
      access the name of the jobserver and the job id for tagging data, etc.
 
+2024.4.12 -- Fixed issue with status of finished jobs
+   * Fixed a problem if a job returned a status of None, which was reported as an
+     error.
+
 2024.4.11 -- Correcting description of this package
 
 2024.4.5 -- Adding support for debugging
