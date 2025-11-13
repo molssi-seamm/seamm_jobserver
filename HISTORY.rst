@@ -1,10 +1,21 @@
 =======
 History
 =======
+2025.11.12 -- Added SEAMM_JOBSERVER and SEAMM_JOB_ID environment variables
+    This PR adds support for passing job-specific metadata to spawned processes through
+    environment variables. Jobs can now access their unique job ID and the name of the
+    JobServer that spawned them.
+
+    * Added SEAMM_JOB_ID and SEAMM_JOBSERVER environment variables for spawned job
+      processes 
+    * Added --name command-line argument to specify JobServer name (defaults to
+      hostname)
+    * Cleaned up docstring formatting
+
 2024.4.12 -- Fixed issue with status of finished jobs
    * Fixed a problem if a job returned a status of None, which was reported as an
      error.
-     
+
 2024.4.11 -- Correcting description of this package
 
 2024.4.5 -- Adding support for debugging
