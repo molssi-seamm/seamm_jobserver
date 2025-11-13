@@ -1,6 +1,10 @@
 =======
 History
 =======
+2025.11.12 -- Added SEAMM_JOBSERVER and SEAMM_JOB_ID environment variables
+   * Added SEAMM_JOBSERVER and SEAMM_JOB_ID environment variables so that jobs can
+     access the name of the jobserver and the job id for tagging data, etc.
+
 2024.4.11 -- Correcting description of this package
 
 2024.4.5 -- Adding support for debugging

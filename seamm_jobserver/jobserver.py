@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
-"""The JobServer for the SEAMM environment.
-
-"""
+"""The JobServer for the SEAMM environment."""
 import collections.abc
 from datetime import datetime, timezone
 import json
@@ -11,6 +9,7 @@ import os
 from pathlib import Path
 import psutil
 import shutil
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -535,6 +534,14 @@ class JobServer(collections.abc.MutableMapping):
             help="Where to save the JSON of the status.",
         )
 
+        parser.add_argument(
+            "JobServer",
+            "--name",
+            default=socket.gethostname(),
+            action="store",
+            help="The name of the JobServer.",
+        )
+
         return parser
 
     def start(self):
@@ -648,6 +655,11 @@ class JobServer(collections.abc.MutableMapping):
             cmd.append(os.environ["SEAMM_LOG_LEVEL"])
 
         cmd.extend(cmdline)
+
+        self.logger.debug(f"cmd for {job_id}: {cmd}")
+
+        os.environ["SEAMM_JOB_ID"] = str(job_id)
+        os.environ["SEAMM_JOBSERVER"] = self.options["name"]
 
         process = psutil.Popen(
             cmd,
