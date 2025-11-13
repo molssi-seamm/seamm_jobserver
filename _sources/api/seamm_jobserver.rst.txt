@@ -9,13 +9,13 @@ seamm\_jobserver.jobserver module
 
 .. automodule:: seamm_jobserver.jobserver
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 Module contents
 ---------------
 
 .. automodule:: seamm_jobserver
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
