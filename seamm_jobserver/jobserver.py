@@ -189,20 +189,34 @@ class JobServer(collections.abc.MutableMapping):
             job_id, path, cmdline = result
             cmdline = json.loads(cmdline)
 
-            pid = self.start_job(job_id, path, cmdline)
+            try:
+                pid = self.start_job(job_id, path, cmdline)
+            except Exception as e:
+                self.logger.warning(f"An error occurred starting job {job_id}:\n\t{e}")
+                status = "startup error"
+                current_time = datetime.now(timezone.utc)
+                cursor = self.db.cursor()
+                cursor.execute(
+                    "UPDATE jobs"
+                    "   SET status=?, started = ?, finished = ?"
+                    " WHERE id = ?",
+                    (status, current_time, current_time, job_id),
+                )
+                self.db.commit()
+            else:
+                status = "running"
+                current_time = datetime.now(timezone.utc)
+                cursor = self.db.cursor()
+                cursor.execute(
+                    "UPDATE jobs"
+                    "   SET status=?, started = ?,"
+                    "       parameters=json_set(jobs.parameters, '$.pid', ?)"
+                    " WHERE id = ?",
+                    (status, current_time, pid, job_id),
+                )
+                self.db.commit()
 
-            current_time = datetime.now(timezone.utc)
-            cursor = self.db.cursor()
-            cursor.execute(
-                "UPDATE jobs"
-                "   SET status='running', started = ?,"
-                "       parameters=json_set(jobs.parameters, '$.pid', ?)"
-                " WHERE id = ?",
-                (current_time, pid, job_id),
-            )
-            self.db.commit()
-
-            self.logger.info(f"Started job {job_id} with pid={pid}, path={path}")
+                self.logger.info(f"Started job {job_id} with pid={pid}, path={path}")
 
     def gui_create(self):
         """Create the tkinter GUI."""
