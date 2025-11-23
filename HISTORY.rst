@@ -1,6 +1,11 @@
 =======
 History
 =======
+2025.11.22 -- Bugfix: Catching errors when starting a job.
+    * Now catch any error that occurs starting a job, and set its status to 'startup
+      error'. This prevents the JobServer getting into a loop repeatedly trying to
+      submit the job.
+
 2025.11.12 -- Added SEAMM_JOBSERVER and SEAMM_JOB_ID environment variables
     This PR adds support for passing job-specific metadata to spawned processes through
     environment variables. Jobs can now access their unique job ID and the name of the
