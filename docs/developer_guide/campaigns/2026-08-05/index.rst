@@ -8,13 +8,15 @@ executor for per-step submission) is not started and not currently
 scheduled. Originally tracked as a workspace-root living planning doc; moved
 here once the campaign was substantially complete.
 
-Open pull requests from this campaign, all awaiting human review (none
-merged yet): `seamm_jobserver #17
+Pull requests from this campaign: `seamm_jobserver #17
 <https://github.com/molssi-seamm/seamm_jobserver/pull/17>`_ (the SLURM
-mode itself, its docs, and this campaign doc), `seamm_slurm #1
-<https://github.com/molssi-seamm/seamm_slurm/pull/1>`_ (docs), and
-`seamm_exec #30 <https://github.com/molssi-seamm/seamm_exec/pull/30>`_
-(the ``job_data.json`` header bugfix).
+mode itself, its docs, and this campaign doc) and `seamm_exec #30
+<https://github.com/molssi-seamm/seamm_exec/pull/30>`_ (the
+``job_data.json`` header bugfix) are still open, awaiting human review.
+``seamm_slurm``'s docs PR, `#1
+<https://github.com/molssi-seamm/seamm_slurm/pull/1>`_, has **merged**;
+its first release (``2026.8.6``) is out for review as `#2
+<https://github.com/molssi-seamm/seamm_slurm/pull/2>`_.
 
 Why
 ---
