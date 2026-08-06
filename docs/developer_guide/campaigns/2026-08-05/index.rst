@@ -8,6 +8,14 @@ executor for per-step submission) is not started and not currently
 scheduled. Originally tracked as a workspace-root living planning doc; moved
 here once the campaign was substantially complete.
 
+Open pull requests from this campaign, all awaiting human review (none
+merged yet): `seamm_jobserver #17
+<https://github.com/molssi-seamm/seamm_jobserver/pull/17>`_ (the SLURM
+mode itself, its docs, and this campaign doc), `seamm_slurm #1
+<https://github.com/molssi-seamm/seamm_slurm/pull/1>`_ (docs), and
+`seamm_exec #30 <https://github.com/molssi-seamm/seamm_exec/pull/30>`_
+(the ``job_data.json`` header bugfix).
+
 Why
 ---
 
@@ -419,7 +427,10 @@ mismatch between two real writers/readers of the same file format):
    as defense in depth, since old already-written files may still have
    the bug. This also fixes a live (if rare) correctness gap in
    ``seamm_datastore.Job.parse_job_data`` for any job that fails via this
-   exact exception path, independent of SLURM entirely.
+   exact exception path, independent of SLURM entirely. The
+   ``seamm_exec`` side of this fix is
+   `PR #30 <https://github.com/molssi-seamm/seamm_exec/pull/30>`_ (open,
+   not yet merged).
 2. **Real submissions always pre-create a ``job_data.json`` stub before
    the flowchart ever runs** (confirmed in
    ``seamm_dashboard/routes/api/jobs.py`` at job-creation time) --
