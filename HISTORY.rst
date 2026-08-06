@@ -1,7 +1,7 @@
 =======
 History
 =======
-Unreleased -- Add SLURM submission mode (Option 1: whole-flowchart sbatch)
+2026.8.6 -- Add SLURM submission mode (Option 1: whole-flowchart sbatch)
     * A JobServer instance can now submit each job as a single SLURM batch job
       instead of a local subprocess, controlled by a new, opt-in
       ``<root>/<jobserver-name>.ini`` config file (absent means unchanged,
