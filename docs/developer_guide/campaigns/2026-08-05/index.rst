@@ -404,6 +404,67 @@ driven by ``computational_environment()``'s per-step sizing, with hybrid
 selection of Option 1 vs Option 2 per job/cluster. Not started, not
 currently scheduled.
 
+Phase 6 -- per-job SLURM resource overrides (implemented, real-world-driven)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Discovered directly from real usage: after Phase 3/4's live deployment on
+MolSSI10, every job from a given JobServer instance got the exact same
+fixed SLURM resource request. This surfaced two real problems at once when
+Paul submitted several real jobs: jobs defaulted to 1 core each with no way
+to ask for more, and -- more surprising -- SLURM was reserving the *entire
+node's memory* per job (since the ini's ``mem`` was left blank), so only
+one job could ever run concurrently on the 6-core node regardless of free
+CPU. Fixing the immediate ``mem`` gap in the live ``molssi10.ini`` (setting
+an explicit ``mem = 20G``) was a config change, not a code change, and was
+confirmed live: three newly-submitted jobs ran genuinely concurrently once
+the fix took effect (the three jobs already in flight before the fix kept
+their original whole-node reservation and continued running one at a time,
+as expected, since a submitted job's resource request is fixed at
+submission time).
+
+The design, from there: sites need a way to let *specific* jobs ask for
+different resources than the instance-wide default, while still corralling
+requests to valid values (Paul: "the site-specific information in
+JobServer.ini should also specify limits ... or enumerated choices ... to
+corral users to valid specifications").
+
+- A job's requested overrides live in its own ``parameters["slurm"]``
+  (e.g. ``{"ntasks": 4, "mem": "40G"}``) -- same place ``cmdline`` already
+  lives, no datastore migration.
+- Which directives a job may override, and within what bounds, is
+  controlled by an optional ``[<section>.limits]`` ini section (enumerated
+  ``.choices``, or ``.min``/``.max`` bounds -- unit-aware for ``mem``
+  (K/M/G/T) and ``time`` (``HH:MM:SS``/``D-HH:MM:SS``), plain numeric
+  otherwise). Secure by default: no ``.limits`` section means nothing is
+  overridable.
+- ``SlurmSection.merge_overrides()`` validates and merges a request server
+  side, always -- never trusts that a caller (e.g. a future web UI)
+  already enforced this. Raises ``ValueError`` on anything unauthorized or
+  out of bounds, which JobServer's existing ``start_job`` error handling
+  already catches and turns into a ``startup error`` status -- no new
+  error-handling plumbing needed.
+- **Moved the whole ini-parsing/validation module from
+  ``seamm_jobserver.slurm_config`` into ``seamm_slurm.config``** (Paul's
+  call): both ``seamm_jobserver`` and any future lightweight consumer (a
+  job-submission UI) need to read this file, and ``seamm_slurm`` was
+  already built to be dependency-light and reusable, unlike
+  ``seamm_jobserver`` itself (psutil, GUI code, job-running machinery).
+  ``seamm_jobserver`` now just imports ``seamm_slurm.config``.
+- **``seamm_dashboard`` will not be getting this feature.** Paul: it's too
+  fragile to keep extending. The requirement was instead written into
+  ``seamm_webui``'s own living plan doc
+  (``~/Work/SEAMM/dashboard-rewrite-plan.md``, that project's session is
+  informally called "datastore") for whenever job submission gets built
+  out there -- not reachable via direct agent messaging (not a spawned
+  teammate in this session), so left as a note in the doc that project
+  actually reads.
+
+34 new tests in ``seamm_slurm`` (``FieldLimits``/``.limits`` parsing/
+``merge_overrides``, including real ``mem``/``time`` unit-conversion cases)
+plus new ``seamm_jobserver`` tests covering the full wiring (override
+applied/rejected/out-of-range, preserved across resubmission and restart
+reattachment). All passing, lint and docs clean in both packages.
+
 Bugs found and fixed during Phase 3
 --------------------------------------
 

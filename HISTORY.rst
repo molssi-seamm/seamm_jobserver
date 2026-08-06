@@ -15,6 +15,14 @@ History
       now trusts the job's own recorded outcome when available, otherwise
       safely resubmits it (flowcharts checkpoint and resume, so this does not
       redo completed work) up to a configurable retry cap before giving up.
+    * A job can now request different SLURM resources (cores, memory,
+      walltime, ...) than the JobServer instance's own defaults, via
+      ``parameters["slurm"]`` on the job row -- gated by a new, optional
+      ``[<section>.limits]`` ini section that says which fields a job may
+      override and within what bounds (enumerated choices or numeric/size/
+      time ranges). Secure by default: no ``.limits`` section means nothing
+      is overridable. Always re-validated server-side regardless of what
+      submitted the job.
     * See the User Guide for the config file format and behavior.
 
 2025.11.22 -- Bugfix: Catching errors when starting a job.

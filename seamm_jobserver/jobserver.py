@@ -20,7 +20,7 @@ import traceback
 
 import seamm_jobserver
 import seamm_util
-from seamm_jobserver.slurm_config import load_slurm_config
+from seamm_slurm.config import load_slurm_config
 from seamm_slurm.script import build_script
 
 logger = logging.getLogger(__name__)
@@ -337,14 +337,19 @@ class JobServer(collections.abc.MutableMapping):
             f"{max_resubmits})."
         )
         self._start_job_slurm(
-            job_id, wdir, data["cmd"], resubmit_count=resubmit_count + 1
+            job_id,
+            wdir,
+            data["cmd"],
+            resubmit_count=resubmit_count + 1,
+            slurm_overrides=data.get("slurm_overrides"),
         )
         return True
 
     def check_for_new_jobs(self):
         """Check the database for new jobs that are runnable."""
         query = (
-            "SELECT id, path, json_extract(parameters, '$.cmdline')"
+            "SELECT id, path, json_extract(parameters, '$.cmdline'),"
+            "       json_extract(parameters, '$.slurm')"
             "  FROM jobs"
             " WHERE status = 'submitted'"
         )
@@ -370,11 +375,14 @@ class JobServer(collections.abc.MutableMapping):
             result = cursor.fetchone()
             if result is None:
                 break
-            job_id, path, cmdline = result
+            job_id, path, cmdline, slurm_overrides = result
             cmdline = json.loads(cmdline)
+            slurm_overrides = json.loads(slurm_overrides) if slurm_overrides else {}
 
             try:
-                pid = self.start_job(job_id, path, cmdline)
+                pid = self.start_job(
+                    job_id, path, cmdline, slurm_overrides=slurm_overrides
+                )
             except Exception as e:
                 self.logger.warning(f"An error occurred starting job {job_id}:\n\t{e}")
                 status = "startup error"
@@ -869,7 +877,8 @@ class JobServer(collections.abc.MutableMapping):
             self.db.execute(
                 "SELECT id, path, json_extract(parameters, '$.slurm_job_id'),"
                 "       json_extract(parameters, '$.cmdline'),"
-                "       json_extract(parameters, '$.resubmit_count')"
+                "       json_extract(parameters, '$.resubmit_count'),"
+                "       json_extract(parameters, '$.slurm')"
                 "  FROM jobs"
                 " WHERE status = 'running'"
             )
@@ -877,13 +886,25 @@ class JobServer(collections.abc.MutableMapping):
         if not rows:
             return
 
-        ids = [str(slurm_id) for _, _, slurm_id, _, _ in rows if slurm_id is not None]
+        ids = [
+            str(slurm_id) for _, _, slurm_id, _, _, _ in rows if slurm_id is not None
+        ]
         statuses = self._slurm_backend.poll_many(ids) if ids else {}
 
-        for job_id, wdir, slurm_id, cmdline_json, resubmit_count in rows:
+        for (
+            job_id,
+            wdir,
+            slurm_id,
+            cmdline_json,
+            resubmit_count,
+            slurm_overrides_json,
+        ) in rows:
             resubmit_count = resubmit_count or 0
             cmdline = json.loads(cmdline_json) if cmdline_json else []
             cmd = self._build_cmd(job_id, wdir, cmdline)
+            slurm_overrides = (
+                json.loads(slurm_overrides_json) if slurm_overrides_json else {}
+            )
 
             status = statuses.get(str(slurm_id)) if slurm_id is not None else None
             if status is not None and not status.is_terminal:
@@ -897,6 +918,7 @@ class JobServer(collections.abc.MutableMapping):
                     "wdir": wdir,
                     "cmd": cmd,
                     "resubmit_count": resubmit_count,
+                    "slurm_overrides": slurm_overrides,
                 }
                 self._times[job_id] = {}
                 self.previous_jobs += 1
@@ -908,10 +930,12 @@ class JobServer(collections.abc.MutableMapping):
                     "likely died mid-submission)."
                 )
             self._reconcile_stalled_job(
-                job_id, {"wdir": wdir, "cmd": cmd}, resubmit_count
+                job_id,
+                {"wdir": wdir, "cmd": cmd, "slurm_overrides": slurm_overrides},
+                resubmit_count,
             )
 
-    def start_job(self, job_id, wdir, cmdline=""):
+    def start_job(self, job_id, wdir, cmdline="", slurm_overrides=None):
         """Run the given job, locally or via SLURM depending on whether
         this JobServer instance has a SLURM config.
 
@@ -919,6 +943,11 @@ class JobServer(collections.abc.MutableMapping):
         ----------
         job_id : integer
             The id of the job to run.
+        slurm_overrides : dict or None
+            A job's requested per-directive SLURM overrides (its
+            ``parameters["slurm"]``), e.g. ``{"ntasks": 4, "mem": "40G"}``.
+            Ignored in local mode. Validated against the SLURM section's
+            ``limits`` before use -- see ``SlurmSection.merge_overrides``.
 
         Returns
         -------
@@ -933,7 +962,9 @@ class JobServer(collections.abc.MutableMapping):
         self.logger.debug(f"cmd for {job_id}: {cmd}")
 
         if self._slurm is not None:
-            self._start_job_slurm(job_id, wdir, cmd)
+            self._start_job_slurm(
+                job_id, wdir, cmd, slurm_overrides=slurm_overrides or {}
+            )
             return None
         return self._start_job_local(job_id, wdir, cmd)
 
@@ -991,7 +1022,9 @@ class JobServer(collections.abc.MutableMapping):
 
         return process.pid
 
-    def _start_job_slurm(self, job_id, wdir, cmd, resubmit_count=0):
+    def _start_job_slurm(
+        self, job_id, wdir, cmd, resubmit_count=0, slurm_overrides=None
+    ):
         """Submit a job to SLURM as a whole-flowchart batch job.
 
         No conda activation is needed in the script -- ``cmd[0]`` is
@@ -1000,7 +1033,16 @@ class JobServer(collections.abc.MutableMapping):
         submitting shell's environment (PATH included) by default, so the
         interpreter is found the same way it would be run directly.
         Confirmed working end-to-end during Phase 0/1 groundwork.
+
+        ``slurm_overrides`` (a job's own ``parameters["slurm"]``, e.g.
+        ``{"ntasks": 4}``) is validated against the section's ``limits`` by
+        ``merge_overrides`` -- raises ``ValueError`` for anything not
+        overridable or out of bounds, which propagates up to
+        ``check_for_new_jobs()``'s existing try/except and is handled the
+        same as any other startup error (job marked ``startup error``).
+        Never trusts that a caller (e.g. a web UI) already validated this.
         """
+        slurm_overrides = slurm_overrides or {}
         quoted_cmd = " ".join(shlex.quote(c) for c in cmd)
         payload = (
             f"export SEAMM_JOB_ID={shlex.quote(str(job_id))}\n"
@@ -1008,7 +1050,7 @@ class JobServer(collections.abc.MutableMapping):
             f"{quoted_cmd}\n"
         )
 
-        directives = dict(self._slurm.directives)
+        directives = self._slurm.merge_overrides(slurm_overrides)
         directives.setdefault("job_name", f"seamm-{job_id}")
         directives.setdefault("chdir", str(wdir))
         script = build_script(directives, payload)
@@ -1045,6 +1087,7 @@ class JobServer(collections.abc.MutableMapping):
             "wdir": wdir,
             "cmd": cmd,
             "resubmit_count": resubmit_count,
+            "slurm_overrides": slurm_overrides,
         }
         self._times[job_id] = {}
         self.total_jobs += 1

@@ -111,11 +111,60 @@ JobServer itself restarts (it re-checks every job still marked ``running``
 against SLURM on startup) -- restarting the JobServer does not lose track of
 or duplicate submissions for jobs that are still genuinely alive in SLURM.
 
+Per-job resource overrides
+---------------------------
+
+Every job from a given JobServer instance otherwise gets the *same* fixed
+resource request (cores, memory, walltime, partition, ...) from the ini
+file above. A specific job can ask for something different by setting
+``parameters["slurm"]`` on its job row, e.g.
+``{"cmdline": [...], "slurm": {"ntasks": 4, "mem": "40G"}}``.
+
+Which directives a job is allowed to override, and within what bounds, is
+controlled by an **optional** companion section, ``[<section-name>.limits]``
+-- secure by default: if it's absent, nothing is overridable, no matter
+what a job's ``parameters["slurm"]`` asks for.
+
+.. code-block:: ini
+
+    [molssi10.limits]
+    # Only fields listed here can be overridden per-job at all. Anything
+    # not listed is fixed by the site config above.
+    overridable = partition, ntasks, mem, time
+
+    # Enumerated choice -> the value must be one of these.
+    partition.choices = batch, gpu
+
+    # Numeric/size/time bounds -- optional per field. "Overridable with no
+    # bound" just means "any value SLURM itself accepts."
+    ntasks.min = 1
+    ntasks.max = 6
+    mem.max = 100G
+    time.max = 04:00:00
+
+The JobServer re-validates every override itself before submitting --
+against ``overridable``, then ``.choices``/``.min``/``.max`` when present --
+regardless of whatever already constrained the request's origin (e.g. a web
+UI). A job with an unauthorized or out-of-bounds override is marked
+``startup error`` rather than silently run with different resources than
+requested, or with the override silently dropped.
+
+If a job needs to be resubmitted (see above), the same override is reused
+for every attempt -- it isn't re-validated against a config that might have
+changed in the meantime, since the section was already validated against at
+submission time.
+
+This ini format is implemented in ``seamm_slurm.config`` (not
+``seamm_jobserver`` itself), specifically so other, more lightweight
+consumers -- a future job-submission UI, for instance -- can read and
+validate it without depending on the rest of the SEAMM stack.
+
 Not yet supported
 ------------------
 
 - Routing a job to a *specific* section when a config file has more than
-  one (all jobs currently use the ``[DEFAULT]`` section).
+  one (all jobs currently use the ``[DEFAULT]`` section) -- ``parameters
+  ["slurm"]`` is expected to gain a ``"section"`` key for this eventually.
 - Per-step SLURM submission (only whole-flowchart submission exists today).
 
 Index

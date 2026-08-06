@@ -15,7 +15,7 @@ import sqlite3
 import pytest
 
 from seamm_jobserver.jobserver import JobServer
-from seamm_jobserver.slurm_config import SlurmSection
+from seamm_slurm.config import FieldLimits, SlurmSection
 from seamm_slurm.status import JobStatus
 
 
@@ -81,7 +81,7 @@ def get_job(db_path, job_id):
     return status, json.loads(parameters)
 
 
-def make_jobserver(db_path, wdir, max_concurrent_jobs=20, max_resubmits=3):
+def make_jobserver(db_path, wdir, max_concurrent_jobs=20, max_resubmits=3, limits=None):
     js = JobServer()
     js.options = {"name": "molssi10"}
     js.db_path = str(db_path)
@@ -92,6 +92,7 @@ def make_jobserver(db_path, wdir, max_concurrent_jobs=20, max_resubmits=3):
         directives={"partition": "batch"},
         max_concurrent_jobs=max_concurrent_jobs,
         max_resubmits=max_resubmits,
+        limits=limits or {},
     )
     js._slurm_backend = FakeSlurmBackend()
     return js
@@ -443,3 +444,151 @@ def test_read_job_data_state_missing_file(tmp_path):
 def test_read_job_data_state_unparseable_content(tmp_path):
     (tmp_path / "job_data.json").write_text("not json at all")
     assert JobServer._read_job_data_state(tmp_path) is None
+
+
+# ---- per-job SLURM overrides (parameters["slurm"]) -----------------------
+
+
+def test_start_job_applies_valid_override(db_path, tmp_path):
+    wdir = tmp_path / "Job_001"
+    wdir.mkdir()
+    insert_job(
+        db_path, 1, "submitted", str(wdir), extra_params={"slurm": {"ntasks": 4}}
+    )
+
+    js = make_jobserver(
+        db_path, wdir, limits={"ntasks": FieldLimits(minimum="1", maximum="6")}
+    )
+    js.check_for_new_jobs()
+
+    assert get_job(db_path, 1)[0] == "running"
+    script = js._slurm_backend.submitted[0]
+    assert "#SBATCH --ntasks=4" in script
+    assert js._jobs[1]["slurm_overrides"] == {"ntasks": 4}
+
+
+def test_start_job_rejects_unauthorized_override(db_path, tmp_path):
+    wdir = tmp_path / "Job_001"
+    wdir.mkdir()
+    insert_job(
+        db_path, 1, "submitted", str(wdir), extra_params={"slurm": {"account": "x"}}
+    )
+
+    js = make_jobserver(db_path, wdir)  # no limits configured at all
+    js.check_for_new_jobs()
+
+    assert get_job(db_path, 1)[0] == "startup error"
+    assert js._slurm_backend.submitted == []
+    assert 1 not in js._jobs
+
+
+def test_start_job_rejects_out_of_range_override(db_path, tmp_path):
+    wdir = tmp_path / "Job_001"
+    wdir.mkdir()
+    insert_job(
+        db_path, 1, "submitted", str(wdir), extra_params={"slurm": {"ntasks": 99}}
+    )
+
+    js = make_jobserver(
+        db_path, wdir, limits={"ntasks": FieldLimits(minimum="1", maximum="6")}
+    )
+    js.check_for_new_jobs()
+
+    assert get_job(db_path, 1)[0] == "startup error"
+    assert js._slurm_backend.submitted == []
+
+
+def test_start_job_with_no_override_still_works(db_path, tmp_path):
+    wdir = tmp_path / "Job_001"
+    wdir.mkdir()
+    insert_job(db_path, 1, "submitted", str(wdir))  # no "slurm" key at all
+
+    js = make_jobserver(
+        db_path, wdir, limits={"ntasks": FieldLimits(minimum="1", maximum="6")}
+    )
+    js.check_for_new_jobs()
+
+    assert get_job(db_path, 1)[0] == "running"
+    assert js._jobs[1]["slurm_overrides"] == {}
+
+
+def test_resubmit_preserves_original_override(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+
+    js = make_jobserver(
+        db_path, wdir, limits={"ntasks": FieldLimits(minimum="1", maximum="6")}
+    )
+    js._jobs[1] = {
+        "mode": "slurm",
+        "slurm_job_id": "42",
+        "wdir": str(wdir),
+        "cmd": ["run_from_jobserver"],
+        "resubmit_count": 0,
+        "slurm_overrides": {"ntasks": 3},
+    }
+    js._times[1] = {}
+    # No entry in js._slurm_backend.statuses for "42" -- poll_many omits it,
+    # so this looks like a lost job and should be resubmitted.
+
+    js.check_for_finished_jobs()
+
+    assert len(js._slurm_backend.submitted) == 1
+    assert "#SBATCH --ntasks=3" in js._slurm_backend.submitted[0]
+    assert js._jobs[1]["slurm_overrides"] == {"ntasks": 3}
+
+
+def test_reattach_lost_job_resubmits_with_original_override(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(
+        db_path,
+        1,
+        "running",
+        str(wdir),
+        extra_params={
+            "slurm_job_id": "42",
+            "resubmit_count": 0,
+            "slurm": {"ntasks": 5},
+        },
+    )
+
+    js = make_jobserver(
+        db_path, wdir, limits={"ntasks": FieldLimits(minimum="1", maximum="6")}
+    )
+    js._slurm_backend.statuses["42"] = JobStatus(
+        job_id="42", state="FAILED", category="failed"
+    )
+
+    js._reattach_slurm_jobs()
+
+    assert len(js._slurm_backend.submitted) == 1
+    assert "#SBATCH --ntasks=5" in js._slurm_backend.submitted[0]
+
+
+def test_reattach_still_running_job_keeps_override(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(
+        db_path,
+        1,
+        "running",
+        str(wdir),
+        extra_params={
+            "slurm_job_id": "42",
+            "resubmit_count": 0,
+            "slurm": {"ntasks": 5},
+        },
+    )
+
+    js = make_jobserver(
+        db_path, wdir, limits={"ntasks": FieldLimits(minimum="1", maximum="6")}
+    )
+    js._slurm_backend.statuses["42"] = JobStatus(
+        job_id="42", state="RUNNING", category="running"
+    )
+
+    js._reattach_slurm_jobs()
+
+    assert js._jobs[1]["slurm_overrides"] == {"ntasks": 5}
