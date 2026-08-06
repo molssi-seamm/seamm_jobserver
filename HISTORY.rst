@@ -1,6 +1,22 @@
 =======
 History
 =======
+Unreleased -- Add SLURM submission mode (Option 1: whole-flowchart sbatch)
+    * A JobServer instance can now submit each job as a single SLURM batch job
+      instead of a local subprocess, controlled by a new, opt-in
+      ``<root>/<jobserver-name>.ini`` config file (absent means unchanged,
+      local-subprocess behavior). Supports both running the SLURM CLI directly
+      on the JobServer's own host and reaching a remote cluster over SSH.
+    * Added a configurable cap on how many jobs a JobServer instance keeps
+      outstanding in SLURM at once.
+    * If a tracked job's SLURM state goes missing or terminal while its
+      datastore row still shows ``running`` (a node failure, an OOM kill, a
+      cancellation, or the JobServer itself having restarted), the JobServer
+      now trusts the job's own recorded outcome when available, otherwise
+      safely resubmits it (flowcharts checkpoint and resume, so this does not
+      redo completed work) up to a configurable retry cap before giving up.
+    * See the User Guide for the config file format and behavior.
+
 2025.11.22 -- Bugfix: Catching errors when starting a job.
     * Now catch any error that occurs starting a job, and set its status to 'startup
       error'. This prevents the JobServer getting into a loop repeatedly trying to
