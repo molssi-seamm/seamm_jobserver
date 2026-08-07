@@ -39,7 +39,9 @@ The JobServer for the SEAMM environment
 Features
 --------
 
-The SEAMM JobServer handles executing Jobs for the Dashboard.
+The SEAMM JobServer handles executing Jobs for the Dashboard, either as
+local subprocesses (the default) or, if configured, by submitting each job
+as a SLURM batch job -- see the User Guide.
 
 
 Acknowledgements

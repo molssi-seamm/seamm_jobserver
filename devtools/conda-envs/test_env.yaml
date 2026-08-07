@@ -2,7 +2,7 @@ name: test
 
 channels:
   - conda-forge
-  
+
 dependencies:
     # Base depends
   - python
@@ -25,6 +25,8 @@ dependencies:
 
   # Pip-only installs
   - pip:
+    # Dependencies for this module (not on conda-forge)
+    - seamm_slurm
     # Documentation
     - sphinx-copybutton
     - sphinxnotes-strike

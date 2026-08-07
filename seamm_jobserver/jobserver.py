@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """The JobServer for the SEAMM environment."""
+
 import collections.abc
 from datetime import datetime, timezone
 import json
@@ -8,6 +9,7 @@ import logging
 import os
 from pathlib import Path
 import psutil
+import shlex
 import shutil
 import socket
 import sqlite3
@@ -18,6 +20,8 @@ import traceback
 
 import seamm_jobserver
 import seamm_util
+from seamm_slurm.config import load_slurm_config
+from seamm_slurm.script import build_script
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
@@ -87,6 +91,8 @@ class JobServer(collections.abc.MutableMapping):
         self._db_path = None
         self._tasks = set()
         self._jobs = {}
+        self._slurm = None
+        self._slurm_backend = None
         self._tk_root = None
         self._after_id = None
         self._status_id = None
@@ -138,6 +144,13 @@ class JobServer(collections.abc.MutableMapping):
 
     def check_for_finished_jobs(self):
         """Check whether jobs have finished."""
+        if self._slurm is not None:
+            self._check_for_finished_jobs_slurm()
+        else:
+            self._check_for_finished_jobs_local()
+
+    def _check_for_finished_jobs_local(self):
+        """Check whether locally-run (non-SLURM) jobs have finished."""
         finished = []
         for job_id, data in self._jobs.items():
             pid = data["pid"]
@@ -172,25 +185,204 @@ class JobServer(collections.abc.MutableMapping):
             del self._jobs[job_id]
             del self._times[job_id]
 
+    def _check_for_finished_jobs_slurm(self):
+        """Check whether SLURM-submitted jobs have finished.
+
+        SLURM is the source of truth for *whether* a job has finished; the
+        job's own ``run_from_jobserver`` process still writes the datastore's
+        final status (``finished``/``error``) directly when it exits
+        normally, exactly as in local mode -- nothing to duplicate here in
+        the common case. Only reconciles (trusts ``job_data.json``, or
+        resubmits, or gives up) when that never happened.
+        """
+        if not self._jobs:
+            return
+
+        id_map = {data["slurm_job_id"]: job_id for job_id, data in self._jobs.items()}
+        statuses = self._slurm_backend.poll_many(list(id_map.keys()))
+
+        # Snapshot: _reconcile_stalled_job may resubmit, which mutates
+        # self._jobs/_times for job_id in place (new slurm_job_id) -- don't
+        # iterate the live dict while that happens.
+        finished = []
+        for job_id, data in list(self._jobs.items()):
+            slurm_id = data["slurm_job_id"]
+            status = statuses.get(slurm_id)
+
+            if status is not None and not status.is_terminal:
+                self.logger.debug(
+                    f"Job {job_id} (slurm_job_id={slurm_id}) is {status.category}."
+                )
+                continue
+
+            if status is None:
+                self.logger.warning(
+                    f"Job {job_id} (slurm_job_id={slurm_id}) is no longer "
+                    "known to SLURM."
+                )
+            else:
+                self.logger.info(
+                    f"Job {job_id} (slurm_job_id={slurm_id}) reached SLURM "
+                    f"state {status.state} ({status.category})."
+                )
+
+            if status is not None and status.category == "completed":
+                self.successful_jobs += 1
+            else:
+                self.failed_jobs += 1
+
+            if self._get_job_status(job_id) == "running":
+                resubmitted = self._reconcile_stalled_job(
+                    job_id, data, data.get("resubmit_count", 0)
+                )
+                if resubmitted:
+                    # _start_job_slurm already replaced self._jobs[job_id]/
+                    # self._times[job_id] with fresh tracking data -- keep it.
+                    continue
+
+            finished.append(job_id)
+
+        for job_id in finished:
+            del self._jobs[job_id]
+            del self._times[job_id]
+
+    def _get_job_status(self, job_id):
+        """The current ``jobs.status`` value for a job, from the datastore."""
+        cursor = self.db.cursor()
+        cursor.execute("SELECT status FROM jobs WHERE id = ?", (job_id,))
+        row = cursor.fetchone()
+        return row[0] if row is not None else None
+
+    @staticmethod
+    def _read_job_data_state(wdir):
+        """Read the ``state`` field from ``<wdir>/job_data.json``, if any.
+
+        ``run()``'s ``finally`` block writes this file unconditionally,
+        before it attempts its own direct sqlite update -- so it is often
+        available even when that later, racier write didn't happen.
+        """
+        path = Path(wdir) / "job_data.json"
+        if not path.exists():
+            return None
+        try:
+            text = path.read_text()
+            # Strip the "!MolSSI job_data 1.0" header. Normally on its own
+            # line, but some writers (seamm_exec's own exception handler,
+            # historically) have omitted the newline after it -- so look for
+            # the JSON object's opening brace rather than assuming a full
+            # first line, to tolerate both forms.
+            text = text[text.index("{") :]
+            data = json.loads(text)
+            return data.get("state")
+        except (OSError, ValueError, KeyError):
+            return None
+
+    def _finalize_job_status(self, job_id, status):
+        """Force a job's datastore status, but only if it is still
+        ``running`` -- avoids clobbering a status the job's own process
+        already wrote (e.g. a race between polling and its own exit)."""
+        current_time = datetime.now(timezone.utc)
+        cursor = self.db.cursor()
+        cursor.execute(
+            "UPDATE jobs SET status = ?, finished = ?"
+            " WHERE id = ? AND status = 'running'",
+            (status, current_time, job_id),
+        )
+        self.db.commit()
+
+    def _reconcile_stalled_job(self, job_id, data, resubmit_count):
+        """Handle a job whose datastore row is still ``running`` even though
+        SLURM no longer shows it as pending/running (it reached a terminal
+        state, or SLURM has no record of it at all).
+
+        First choice: trust ``job_data.json`` if the flowchart's own process
+        managed to write one -- avoids a needless resubmit when the run
+        actually finished (successfully or not) but its own direct sqlite
+        write raced or failed. Falls back to resubmitting, up to
+        ``max_resubmits``, since flowcharts checkpoint completed steps and
+        safely resume (see the design plan); beyond the cap, gives up and
+        marks the job ``error``.
+
+        Returns
+        -------
+        bool
+            True if the job was resubmitted -- meaning ``self._jobs[job_id]``
+            and ``self._times[job_id]`` were just replaced with fresh
+            tracking data by ``_start_job_slurm`` and callers must not then
+            delete them. False if the job was finalized (finished/error) and
+            is no longer tracked here.
+        """
+        wdir = data["wdir"]
+
+        state = self._read_job_data_state(wdir)
+        if state is not None:
+            self.logger.info(
+                f"Job {job_id}: SLURM lost track of it, but job_data.json "
+                f"says '{state}' -- trusting that over resubmitting."
+            )
+            self._finalize_job_status(job_id, state)
+            return False
+
+        max_resubmits = self._slurm.max_resubmits
+        if resubmit_count >= max_resubmits:
+            self.logger.warning(
+                f"Job {job_id}: giving up after {resubmit_count} resubmit(s) "
+                "(SLURM lost track of it and no job_data.json was written)."
+            )
+            self._finalize_job_status(job_id, "error")
+            return False
+
+        self.logger.warning(
+            f"Job {job_id}: resubmitting (attempt {resubmit_count + 1}/"
+            f"{max_resubmits})."
+        )
+        self._start_job_slurm(
+            job_id,
+            wdir,
+            data["cmd"],
+            resubmit_count=resubmit_count + 1,
+            slurm_overrides=data.get("slurm_overrides"),
+        )
+        return True
+
     def check_for_new_jobs(self):
         """Check the database for new jobs that are runnable."""
-        cursor = self.db.cursor()
-
-        self.logger.debug("Checking jobs in datastore")
-        cursor.execute(
-            "SELECT id, path, json_extract(parameters, '$.cmdline')"
+        query = (
+            "SELECT id, path, json_extract(parameters, '$.cmdline'),"
+            "       json_extract(parameters, '$.slurm')"
             "  FROM jobs"
             " WHERE status = 'submitted'"
         )
+        params = ()
+
+        if self._slurm is not None:
+            available = self._slurm.max_concurrent_jobs - len(self._jobs)
+            if available <= 0:
+                self.logger.debug(
+                    "At max_concurrent_jobs "
+                    f"({self._slurm.max_concurrent_jobs}); not starting new "
+                    "jobs this cycle."
+                )
+                return
+            query += " LIMIT ?"
+            params = (available,)
+
+        cursor = self.db.cursor()
+
+        self.logger.debug("Checking jobs in datastore")
+        cursor.execute(query, params)
         while True:
             result = cursor.fetchone()
             if result is None:
                 break
-            job_id, path, cmdline = result
+            job_id, path, cmdline, slurm_overrides = result
             cmdline = json.loads(cmdline)
+            slurm_overrides = json.loads(slurm_overrides) if slurm_overrides else {}
 
             try:
-                pid = self.start_job(job_id, path, cmdline)
+                pid = self.start_job(
+                    job_id, path, cmdline, slurm_overrides=slurm_overrides
+                )
             except Exception as e:
                 self.logger.warning(f"An error occurred starting job {job_id}:\n\t{e}")
                 status = "startup error"
@@ -204,19 +396,25 @@ class JobServer(collections.abc.MutableMapping):
                 )
                 self.db.commit()
             else:
-                status = "running"
-                current_time = datetime.now(timezone.utc)
-                cursor = self.db.cursor()
-                cursor.execute(
-                    "UPDATE jobs"
-                    "   SET status=?, started = ?,"
-                    "       parameters=json_set(jobs.parameters, '$.pid', ?)"
-                    " WHERE id = ?",
-                    (status, current_time, pid, job_id),
-                )
-                self.db.commit()
+                if self._slurm is None:
+                    status = "running"
+                    current_time = datetime.now(timezone.utc)
+                    cursor = self.db.cursor()
+                    cursor.execute(
+                        "UPDATE jobs"
+                        "   SET status=?, started = ?,"
+                        "       parameters=json_set(jobs.parameters, '$.pid', ?)"
+                        " WHERE id = ?",
+                        (status, current_time, pid, job_id),
+                    )
+                    self.db.commit()
 
-                self.logger.info(f"Started job {job_id} with pid={pid}, path={path}")
+                    self.logger.info(
+                        f"Started job {job_id} with pid={pid}, path={path}"
+                    )
+                else:
+                    # _start_job_slurm already updated the datastore itself.
+                    self.logger.info(f"Started job {job_id} via SLURM, path={path}")
 
     def gui_create(self):
         """Create the tkinter GUI."""
@@ -396,6 +594,12 @@ class JobServer(collections.abc.MutableMapping):
 
         for job_id in sorted(status["Jobs"].keys()):
             js = status["Jobs"][job_id]
+            if "slurm_job_id" in js:
+                text.insert(
+                    "end",
+                    f"\n{job_id}: slurm_job_id={js['slurm_job_id']}\n",
+                )
+                continue
             memory_percent = js["memory %"]
             rss = js["resident memory"]
             cpu_percent = js["cpu %"]
@@ -465,6 +669,18 @@ class JobServer(collections.abc.MutableMapping):
         db_path = datastore / "seamm.db"
 
         self.check_interval = self.options["check_interval"]
+
+        # SLURM config, if any -- <root>/<jobserver-name>.ini. Absence means
+        # "run jobs as local subprocesses", exactly as before this existed.
+        root = Path(self.seamm_options["root"]).expanduser()
+        self._slurm = load_slurm_config(root, self.options["name"])
+        if self._slurm is not None:
+            self._slurm_backend = self._slurm.build_backend()
+            logger.info(
+                f"Using SLURM (section '{self._slurm.name}', transport="
+                f"'{self._slurm.transport}') to run jobs, up to "
+                f"{self._slurm.max_concurrent_jobs} at a time."
+            )
 
         # Log how we are starting
         self._ini_files = parser.get_ini_files()
@@ -565,45 +781,10 @@ class JobServer(collections.abc.MutableMapping):
             self.initialize()
 
         # Find any jobs already running
-        for row in self.db.execute(
-            "SELECT id, json_extract(parameters, '$.pid')"
-            "  FROM jobs"
-            " WHERE status = 'running'"
-        ):
-            job_id, pid = row
-            if pid is None:
-                finished = True
-            else:
-                finished = False
-                try:
-                    process = psutil.Process(pid=pid)
-                except psutil.NoSuchProcess:
-                    finished = True
-                    pass
-                else:
-                    if process.is_running():
-                        self._jobs[job_id] = {"pid": process.pid, "process": process}
-                        self._times[job_id] = {}
-                    else:
-                        finished = True
-            if finished:
-                self.logger.info(f"Job {job_id} already finished (pid={pid}).")
-                try:
-                    current_time = datetime.now(timezone.utc)
-                    cursor = self.db.cursor()
-                    cursor.execute(
-                        "UPDATE jobs"
-                        "   SET status = 'finished', finished = ?,"
-                        "       parameters=json_remove(jobs.parameters, '$.pid')"
-                        " WHERE id = ?",
-                        (current_time, job_id),
-                    )
-                    self.db.commit()
-                except Exception as e:
-                    self.logger.warning(f"Could not update job {job_id}: {e}")
-            else:
-                self.previous_jobs += 1
-                self.logger.info(f"Job {job_id} is still running (pid={pid}).")
+        if self._slurm is not None:
+            self._reattach_slurm_jobs()
+        else:
+            self._reattach_local_jobs()
 
         if self._tk_root is not None:
             self._after_id = self._tk_root.after(10, self.gui_event_loop)
@@ -634,25 +815,169 @@ class JobServer(collections.abc.MutableMapping):
         self._db.close()
         logger.info("Good bye!")
 
-    def start_job(self, job_id, wdir, cmdline=""):
-        """Run the given job.
+    def _reattach_local_jobs(self):
+        """On startup, find any locally-run jobs already in progress."""
+        for row in self.db.execute(
+            "SELECT id, json_extract(parameters, '$.pid')"
+            "  FROM jobs"
+            " WHERE status = 'running'"
+        ):
+            job_id, pid = row
+            if pid is None:
+                finished = True
+            else:
+                finished = False
+                try:
+                    process = psutil.Process(pid=pid)
+                except psutil.NoSuchProcess:
+                    finished = True
+                    pass
+                else:
+                    if process.is_running():
+                        self._jobs[job_id] = {
+                            "mode": "local",
+                            "pid": process.pid,
+                            "process": process,
+                        }
+                        self._times[job_id] = {}
+                    else:
+                        finished = True
+            if finished:
+                self.logger.info(f"Job {job_id} already finished (pid={pid}).")
+                try:
+                    current_time = datetime.now(timezone.utc)
+                    cursor = self.db.cursor()
+                    cursor.execute(
+                        "UPDATE jobs"
+                        "   SET status = 'finished', finished = ?,"
+                        "       parameters=json_remove(jobs.parameters, '$.pid')"
+                        " WHERE id = ?",
+                        (current_time, job_id),
+                    )
+                    self.db.commit()
+                except Exception as e:
+                    self.logger.warning(f"Could not update job {job_id}: {e}")
+            else:
+                self.previous_jobs += 1
+                self.logger.info(f"Job {job_id} is still running (pid={pid}).")
+
+    def _reattach_slurm_jobs(self):
+        """On startup, find any SLURM-submitted jobs already in progress.
+
+        SLURM is the source of truth here, not any state JobServer itself
+        remembered before restarting: look up each `running`-status job's
+        last known `slurm_job_id` and ask SLURM. Still pending/running ->
+        resume tracking it. Terminal, gone, or never even got a
+        `slurm_job_id` recorded (JobServer died mid-submission) -> the same
+        reconciliation path as the steady-state case (trust job_data.json,
+        else resubmit up to a cap, else give up) -- safe because flowcharts
+        checkpoint completed steps and safely resume.
+        """
+        rows = list(
+            self.db.execute(
+                "SELECT id, path, json_extract(parameters, '$.slurm_job_id'),"
+                "       json_extract(parameters, '$.cmdline'),"
+                "       json_extract(parameters, '$.resubmit_count'),"
+                "       json_extract(parameters, '$.slurm')"
+                "  FROM jobs"
+                " WHERE status = 'running'"
+            )
+        )
+        if not rows:
+            return
+
+        ids = [
+            str(slurm_id) for _, _, slurm_id, _, _, _ in rows if slurm_id is not None
+        ]
+        statuses = self._slurm_backend.poll_many(ids) if ids else {}
+
+        for (
+            job_id,
+            wdir,
+            slurm_id,
+            cmdline_json,
+            resubmit_count,
+            slurm_overrides_json,
+        ) in rows:
+            resubmit_count = resubmit_count or 0
+            cmdline = json.loads(cmdline_json) if cmdline_json else []
+            cmd = self._build_cmd(job_id, wdir, cmdline)
+            slurm_overrides = (
+                json.loads(slurm_overrides_json) if slurm_overrides_json else {}
+            )
+
+            status = statuses.get(str(slurm_id)) if slurm_id is not None else None
+            if status is not None and not status.is_terminal:
+                self.logger.info(
+                    f"Job {job_id} (slurm_job_id={slurm_id}) is still "
+                    f"{status.category}."
+                )
+                self._jobs[job_id] = {
+                    "mode": "slurm",
+                    "slurm_job_id": str(slurm_id),
+                    "wdir": wdir,
+                    "cmd": cmd,
+                    "resubmit_count": resubmit_count,
+                    "slurm_overrides": slurm_overrides,
+                }
+                self._times[job_id] = {}
+                self.previous_jobs += 1
+                continue
+
+            if slurm_id is None:
+                self.logger.warning(
+                    f"Job {job_id} has no recorded slurm_job_id (JobServer "
+                    "likely died mid-submission)."
+                )
+            self._reconcile_stalled_job(
+                job_id,
+                {"wdir": wdir, "cmd": cmd, "slurm_overrides": slurm_overrides},
+                resubmit_count,
+            )
+
+    def start_job(self, job_id, wdir, cmdline="", slurm_overrides=None):
+        """Run the given job, locally or via SLURM depending on whether
+        this JobServer instance has a SLURM config.
 
         Parameters
         ----------
         job_id : integer
             The id of the job to run.
+        slurm_overrides : dict or None
+            A job's requested per-directive SLURM overrides (its
+            ``parameters["slurm"]``), e.g. ``{"ntasks": 4, "mem": "40G"}``.
+            Ignored in local mode. Validated against the SLURM section's
+            ``limits`` before use -- see ``SlurmSection.merge_overrides``.
+
+        Returns
+        -------
+        int or None
+            The local pid, if run locally. ``None`` if run via SLURM --
+            ``_start_job_slurm`` updates the datastore itself in that case,
+            since it also needs to record the SLURM job id.
         """
         self.logger.info("Starting job {}".format(job_id))
 
+        cmd = self._build_cmd(job_id, wdir, cmdline)
+        self.logger.debug(f"cmd for {job_id}: {cmd}")
+
+        if self._slurm is not None:
+            self._start_job_slurm(
+                job_id, wdir, cmd, slurm_overrides=slurm_overrides or {}
+            )
+            return None
+        return self._start_job_local(job_id, wdir, cmd)
+
+    def _build_cmd(self, job_id, wdir, cmdline):
+        """Build the ``run_from_jobserver`` command line for a job -- the
+        same command whether it's about to be run as a local subprocess or
+        as the payload of a SLURM batch script."""
         path = sys.executable
         if path is not None and path != "":
             exe = Path(path).parent / "run_from_jobserver"
         else:
             exe = shutil.which("run_from_jobserver")
-        cmd = [str(exe)]
-        cmd.append(str(job_id))
-        cmd.append(str(wdir))
-        cmd.append(str(self.db_path))
+        cmd = [str(exe), str(job_id), str(wdir), str(self.db_path)]
 
         # Check if in docker container
         cgroup = Path("/proc/self/cgroup")
@@ -671,8 +996,10 @@ class JobServer(collections.abc.MutableMapping):
 
         cmd.extend(cmdline)
 
-        self.logger.debug(f"cmd for {job_id}: {cmd}")
+        return cmd
 
+    def _start_job_local(self, job_id, wdir, cmd):
+        """Run a job as a local subprocess (today's, pre-SLURM, behavior)."""
         # Create a copy of the current environment with job-specific variables
         env = os.environ.copy()
         env["SEAMM_JOB_ID"] = str(job_id)
@@ -687,13 +1014,85 @@ class JobServer(collections.abc.MutableMapping):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        self._jobs[job_id] = {"pid": process.pid, "process": process}
+        self._jobs[job_id] = {"mode": "local", "pid": process.pid, "process": process}
         self._times[job_id] = {}
         self.logger.debug(f"   process = {process}")
 
         self.total_jobs += 1
 
         return process.pid
+
+    def _start_job_slurm(
+        self, job_id, wdir, cmd, resubmit_count=0, slurm_overrides=None
+    ):
+        """Submit a job to SLURM as a whole-flowchart batch job.
+
+        No conda activation is needed in the script -- ``cmd[0]`` is
+        already the full, absolute path to ``run_from_jobserver`` inside
+        the active environment (see ``_build_cmd``), and SLURM inherits the
+        submitting shell's environment (PATH included) by default, so the
+        interpreter is found the same way it would be run directly.
+        Confirmed working end-to-end during Phase 0/1 groundwork.
+
+        ``slurm_overrides`` (a job's own ``parameters["slurm"]``, e.g.
+        ``{"ntasks": 4}``) is validated against the section's ``limits`` by
+        ``merge_overrides`` -- raises ``ValueError`` for anything not
+        overridable or out of bounds, which propagates up to
+        ``check_for_new_jobs()``'s existing try/except and is handled the
+        same as any other startup error (job marked ``startup error``).
+        Never trusts that a caller (e.g. a web UI) already validated this.
+        """
+        slurm_overrides = slurm_overrides or {}
+        quoted_cmd = " ".join(shlex.quote(c) for c in cmd)
+        payload = (
+            f"export SEAMM_JOB_ID={shlex.quote(str(job_id))}\n"
+            f"export SEAMM_JOBSERVER={shlex.quote(self.options['name'])}\n"
+            f"{quoted_cmd}\n"
+        )
+
+        directives = self._slurm.merge_overrides(slurm_overrides)
+        directives.setdefault("job_name", f"seamm-{job_id}")
+        directives.setdefault("chdir", str(wdir))
+        script = build_script(directives, payload)
+
+        # Best-effort: keep a copy in the job's own directory for debugging,
+        # alongside job_data.json/references.db. Not required for
+        # submission itself -- that goes over sbatch's stdin.
+        try:
+            (Path(wdir) / "slurm_submit.sh").write_text(script)
+        except OSError as e:
+            self.logger.warning(f"Could not write slurm_submit.sh for {job_id}: {e}")
+
+        slurm_job_id = self._slurm_backend.submit(script)
+        self.logger.info(
+            f"Job {job_id}: submitted to SLURM as {slurm_job_id} "
+            f"(attempt {resubmit_count + 1})."
+        )
+
+        current_time = datetime.now(timezone.utc)
+        cursor = self.db.cursor()
+        cursor.execute(
+            "UPDATE jobs"
+            "   SET status = 'running', started = ?,"
+            "       parameters = json_set(json_set(jobs.parameters,"
+            "         '$.slurm_job_id', ?), '$.resubmit_count', ?)"
+            " WHERE id = ?",
+            (current_time, slurm_job_id, resubmit_count, job_id),
+        )
+        self.db.commit()
+
+        self._jobs[job_id] = {
+            "mode": "slurm",
+            "slurm_job_id": slurm_job_id,
+            "wdir": wdir,
+            "cmd": cmd,
+            "resubmit_count": resubmit_count,
+            "slurm_overrides": slurm_overrides,
+        }
+        self._times[job_id] = {}
+        self.total_jobs += 1
+
+        return slurm_job_id
 
     def status(self):
         """Get the current load, etc."""
@@ -764,6 +1163,14 @@ class JobServer(collections.abc.MutableMapping):
                 }
         js = status["Jobs"] = {}
         for job_id, data in self._jobs.items():
+            if data.get("mode") == "slurm":
+                # No local process to inspect -- report what SLURM knows
+                # instead of psutil cpu/memory stats.
+                js[job_id] = {
+                    "slurm_job_id": data["slurm_job_id"],
+                    "resubmit_count": data.get("resubmit_count", 0),
+                }
+                continue
             pid = data["pid"]
             if job_id not in self._times:
                 self._times[job_id] = {}
