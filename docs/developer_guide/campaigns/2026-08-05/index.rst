@@ -1,22 +1,31 @@
 2026-08-05 -- SLURM submission for JobServer
 =============================================
 
-Status: Phases 0-4 done (SLURM version/JSON groundwork, the ``seamm_slurm``
-backend library, JobServer's SLURM mode, real end-to-end validation on
-MolSSI10, and this documentation). Phase 5 (a future ``seamm_exec`` ``Slurm``
-executor for per-step submission) is not started and not currently
-scheduled. Originally tracked as a workspace-root living planning doc; moved
-here once the campaign was substantially complete.
+Status: Phases 0-4 and 6 done (SLURM version/JSON groundwork, the
+``seamm_slurm`` backend library, JobServer's SLURM mode, real end-to-end
+validation on MolSSI10 -- including a live-discovered per-job resource
+override feature -- and this documentation). Phase 5 (a future
+``seamm_exec`` ``Slurm`` executor for per-step submission) is not started
+and not currently scheduled. Originally tracked as a workspace-root living
+planning doc; moved here once the campaign was substantially complete.
 
 Pull requests from this campaign: `seamm_jobserver #17
 <https://github.com/molssi-seamm/seamm_jobserver/pull/17>`_ (the SLURM
-mode itself, its docs, and this campaign doc) and `seamm_exec #30
+mode, per-job overrides, docs, and this campaign doc) and `seamm_exec #30
 <https://github.com/molssi-seamm/seamm_exec/pull/30>`_ (the
 ``job_data.json`` header bugfix) are still open, awaiting human review.
-``seamm_slurm``'s docs PR, `#1
-<https://github.com/molssi-seamm/seamm_slurm/pull/1>`_, has **merged**;
-its first release (``2026.8.6``) is out for review as `#2
-<https://github.com/molssi-seamm/seamm_slurm/pull/2>`_.
+``seamm_slurm`` has had two merged PRs and two releases: `#1
+<https://github.com/molssi-seamm/seamm_slurm/pull/1>`_ (docs) released as
+``2026.8.6``, and `#3 <https://github.com/molssi-seamm/seamm_slurm/pull/3>`_
+(the ``config`` module + ``.limits``/``merge_overrides``) released as
+``2026.8.6.1``. ``2026.8.6`` itself never reached PyPI -- its release event
+was published during a GitHub Actions outage
+(2026-08-06 15:22 UTC - 2026-08-07 02:04 UTC) and appears to have been lost
+rather than queued, so nothing retroactively triggered it once GitHub
+recovered. Not a functional problem since ``2026.8.6.1`` is a strict
+superset and did publish successfully (confirmed on PyPI) once cut after
+the outage cleared -- just a gap in PyPI's version history for that one
+tag.
 
 Why
 ---
