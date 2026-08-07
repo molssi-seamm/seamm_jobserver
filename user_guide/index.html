@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2025.11.22 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.8.6 documentation</title>
   
   
   
@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
-<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+  <link href="../_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -36,10 +36,10 @@
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=c224919a" />
   
   <!-- So that users can add custom icons -->
-  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
-<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
 
 <!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -49,13 +49,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=29860f53"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/documentation_options.js?v=9f7a9088"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/index';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
 
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -63,21 +64,27 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Getting Started" href="../getting_started/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2025.11.22" />
+  <meta name="docsearch:version" content="2026.8.6" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
   </head>
-  
-  
-  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
-
+  <body data-default-mode="">
   
   
   <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
   
   <div id="pst-scroll-pixel-helper"></div>
   
   <button type="button" class="btn rounded-pill" id="pst-back-to-top">
     <i class="fa-solid fa-arrow-up"></i>Back to top</button>
-
+  
+  
+  
   
   <dialog id="pst-search-dialog">
     
@@ -103,7 +110,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 </div>
 
   
-    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
 <div class="bd-header__inner bd-page-width">
   <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
     <span class="fa-solid fa-bars"></span>
@@ -233,11 +240,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
         <div class="navbar-item"><ul class="navbar-icon-links"
     aria-label="Icon Links">
@@ -250,8 +264,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           
           
           
-          <a href="https://github.com/molssi-seamm/seamm_jobserver" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i>
-            <span class="sr-only">GitHub</span></a>
+          <a href="https://github.com/molssi-seamm/seamm_jobserver" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -262,8 +275,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           
           
           
-          <a href="https://twitter.com/MolSSI_NSF" title="Twitter" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-twitter fa-lg" aria-hidden="true"></i>
-            <span class="sr-only">Twitter</span></a>
+          <a href="https://twitter.com/MolSSI_NSF" title="Twitter" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-twitter fa-lg" aria-hidden="true"></i><span class="visually-hidden">Twitter</span></a>
         </li>
 </ul></div>
       
@@ -380,11 +392,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
           <div class="navbar-item"><ul class="navbar-icon-links"
     aria-label="Icon Links">
@@ -397,8 +416,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           
           
           
-          <a href="https://github.com/molssi-seamm/seamm_jobserver" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i>
-            <span class="sr-only">GitHub</span></a>
+          <a href="https://github.com/molssi-seamm/seamm_jobserver" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
         <li class="nav-item">
           
@@ -409,8 +427,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           
           
           
-          <a href="https://twitter.com/MolSSI_NSF" title="Twitter" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-twitter fa-lg" aria-hidden="true"></i>
-            <span class="sr-only">Twitter</span></a>
+          <a href="https://twitter.com/MolSSI_NSF" title="Twitter" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-twitter fa-lg" aria-hidden="true"></i><span class="visually-hidden">Twitter</span></a>
         </li>
 </ul></div>
         
@@ -419,7 +436,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   </div>
   
     <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
         <div class="sidebar-primary-item">
+
 <nav class="bd-docs-nav bd-links"
      aria-label="Section Navigation">
   <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
@@ -481,7 +506,154 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                   
   <section id="user-guide">
 <span id="id1"></span><h1>User Guide<a class="headerlink" href="#user-guide" title="Link to this heading">#</a></h1>
-<p>The XXXX plug-in …</p>
+<p>The JobServer polls a SEAMM datastore for jobs with status <code class="docutils literal notranslate"><span class="pre">submitted</span></code> and
+runs them, one flowchart per job. By default it runs each job as a local
+subprocess (<code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code>) on the same host the JobServer itself is
+running on – this is unchanged and needs no configuration.</p>
+<section id="slurm-submission">
+<h2>SLURM submission<a class="headerlink" href="#slurm-submission" title="Link to this heading">#</a></h2>
+<p>A JobServer instance can instead submit each job as a whole-flowchart SLURM
+batch job. This is opt-in and entirely determined by whether a config file
+exists – there is no command-line flag.</p>
+<section id="enabling-it">
+<h3>Enabling it<a class="headerlink" href="#enabling-it" title="Link to this heading">#</a></h3>
+<p>Create <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">~/SEAMM/molssi10.ini</span></code> for a
+JobServer started with <code class="docutils literal notranslate"><span class="pre">--name</span> <span class="pre">molssi10</span></code>, which is the default – the
+JobServer’s name defaults to the hostname it’s running on). This is a
+system/machine config file, like <code class="docutils literal notranslate"><span class="pre">orca.ini</span></code> or <code class="docutils literal notranslate"><span class="pre">lammps.ini</span></code> – it lives
+at <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;</span></code> (the same directory as those), not in
+<code class="docutils literal notranslate"><span class="pre">~/.seamm.d/seamm.ini</span></code>. If the file doesn’t exist, the JobServer runs jobs
+locally exactly as it always has.</p>
+<p>The file has one section per cluster/queue this JobServer instance can
+submit to (currently only one is actually used – selecting among several is
+not yet implemented, see below):</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[DEFAULT]</span>
+<span class="c1"># which section to use -- required if there&#39;s more than one section</span>
+<span class="na">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">molssi10</span>
+
+<span class="k">[molssi10]</span>
+<span class="c1"># transport: local (SLURM CLI on this host) | ssh (SLURM CLI on a</span>
+<span class="c1"># remote host, reached over passwordless SSH)</span>
+<span class="na">transport</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">local</span>
+<span class="c1"># only used when transport = ssh</span>
+<span class="c1"># host = molssi10</span>
+
+<span class="c1"># SLURM submission directives -- each becomes an `#SBATCH --flag=value`</span>
+<span class="c1"># line. Any key not listed here is still passed through, converting</span>
+<span class="c1"># underscores to dashes (e.g. `gres = gpu:1` -&gt; `#SBATCH --gres=gpu:1`).</span>
+<span class="na">partition</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">batch</span>
+<span class="na">account</span><span class="w"> </span><span class="o">=</span>
+<span class="na">qos</span><span class="w"> </span><span class="o">=</span>
+<span class="na">nodes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1</span>
+<span class="na">ntasks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1</span>
+<span class="na">time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">01:00:00</span>
+<span class="na">mem</span><span class="w"> </span><span class="o">=</span>
+<span class="na">gpus</span><span class="w"> </span><span class="o">=</span>
+
+<span class="c1"># JobServer behavior, not SLURM directives:</span>
+<span class="c1"># how many jobs this instance keeps outstanding in SLURM at once</span>
+<span class="na">max_concurrent_jobs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">20</span>
+<span class="c1"># how many times to resubmit a job SLURM lost track of (see below)</span>
+<span class="c1"># before giving up and marking it &quot;error&quot;</span>
+<span class="na">max_resubmits</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">3</span>
+</pre></div>
+</div>
+<p>A blank value (<code class="docutils literal notranslate"><span class="pre">account</span> <span class="pre">=</span></code>) means “don’t pass that directive at all” –
+let SLURM’s own defaults apply.</p>
+<p>If there’s exactly one section (besides <code class="docutils literal notranslate"><span class="pre">[DEFAULT]</span></code>), it’s used
+automatically and <code class="docutils literal notranslate"><span class="pre">default</span> <span class="pre">=</span></code> is optional.</p>
+</section>
+<section id="what-happens">
+<h3>What happens<a class="headerlink" href="#what-happens" title="Link to this heading">#</a></h3>
+<p>When a job comes up for submission, the JobServer builds a script wrapping
+the same <code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code> command it would otherwise run directly –
+no <code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">activate</span></code> or other shell setup is needed, since the command
+already uses the full path to the active Python environment’s
+<code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code>, and SLURM inherits the submitting environment by
+default. The script is submitted via <code class="docutils literal notranslate"><span class="pre">sbatch</span></code>’s standard input (not
+written to a file the target host needs to see – this also works if
+<code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> and there’s no shared filesystem with the cluster). A
+copy is also saved to the job’s own working directory, as
+<code class="docutils literal notranslate"><span class="pre">slurm_submit.sh</span></code>, for reference.</p>
+<p>The job’s datastore row records the returned SLURM job ID (in its
+<code class="docutils literal notranslate"><span class="pre">parameters</span></code> JSON, alongside a <code class="docutils literal notranslate"><span class="pre">resubmit_count</span></code> – see below) instead of
+a local process ID. From then on, SLURM is the source of truth for whether
+the job is still pending, running, or finished – the JobServer polls
+<code class="docutils literal notranslate"><span class="pre">squeue</span></code>/<code class="docutils literal notranslate"><span class="pre">sacct</span></code> rather than watching a local process.</p>
+<p>If a job’s own flowchart run finishes normally (successfully or not), it
+writes its own final status to the datastore directly, exactly as in local
+mode – the JobServer doesn’t need to do anything further. The JobServer
+only steps in if a tracked job’s SLURM state goes missing or terminal while
+its datastore row still says <code class="docutils literal notranslate"><span class="pre">running</span></code> – meaning the run never got a
+chance to record its own outcome (a node failure, an out-of-memory kill, a
+cancellation, SLURM losing the record entirely, or the JobServer itself
+having been restarted). In that case it:</p>
+<ol class="arabic simple">
+<li><p>Trusts the job’s own <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> if the run got far enough to write
+one, rather than resubmitting needlessly.</p></li>
+<li><p>Otherwise resubmits, up to <code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code> times – safe because
+flowcharts checkpoint completed steps and resume from the first
+incomplete one, so a resubmitted run picks up where it left off rather
+than starting over.</p></li>
+<li><p>Beyond the cap, gives up and marks the job <code class="docutils literal notranslate"><span class="pre">error</span></code>.</p></li>
+</ol>
+<p>This same reconciliation runs both during normal polling and when the
+JobServer itself restarts (it re-checks every job still marked <code class="docutils literal notranslate"><span class="pre">running</span></code>
+against SLURM on startup) – restarting the JobServer does not lose track of
+or duplicate submissions for jobs that are still genuinely alive in SLURM.</p>
+</section>
+<section id="per-job-resource-overrides">
+<h3>Per-job resource overrides<a class="headerlink" href="#per-job-resource-overrides" title="Link to this heading">#</a></h3>
+<p>Every job from a given JobServer instance otherwise gets the <em>same</em> fixed
+resource request (cores, memory, walltime, partition, …) from the ini
+file above. A specific job can ask for something different by setting
+<code class="docutils literal notranslate"><span class="pre">parameters[&quot;slurm&quot;]</span></code> on its job row, e.g.
+<code class="docutils literal notranslate"><span class="pre">{&quot;cmdline&quot;:</span> <span class="pre">[...],</span> <span class="pre">&quot;slurm&quot;:</span> <span class="pre">{&quot;ntasks&quot;:</span> <span class="pre">4,</span> <span class="pre">&quot;mem&quot;:</span> <span class="pre">&quot;40G&quot;}}</span></code>.</p>
+<p>Which directives a job is allowed to override, and within what bounds, is
+controlled by an <strong>optional</strong> companion section, <code class="docutils literal notranslate"><span class="pre">[&lt;section-name&gt;.limits]</span></code>
+– secure by default: if it’s absent, nothing is overridable, no matter
+what a job’s <code class="docutils literal notranslate"><span class="pre">parameters[&quot;slurm&quot;]</span></code> asks for.</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[molssi10.limits]</span>
+<span class="c1"># Only fields listed here can be overridden per-job at all. Anything</span>
+<span class="c1"># not listed is fixed by the site config above.</span>
+<span class="na">overridable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">partition, ntasks, mem, time</span>
+
+<span class="c1"># Enumerated choice -&gt; the value must be one of these.</span>
+<span class="na">partition.choices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">batch, gpu</span>
+
+<span class="c1"># Numeric/size/time bounds -- optional per field. &quot;Overridable with no</span>
+<span class="c1"># bound&quot; just means &quot;any value SLURM itself accepts.&quot;</span>
+<span class="na">ntasks.min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1</span>
+<span class="na">ntasks.max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">6</span>
+<span class="na">mem.max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">100G</span>
+<span class="na">time.max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">04:00:00</span>
+</pre></div>
+</div>
+<p>The JobServer re-validates every override itself before submitting –
+against <code class="docutils literal notranslate"><span class="pre">overridable</span></code>, then <code class="docutils literal notranslate"><span class="pre">.choices</span></code>/<code class="docutils literal notranslate"><span class="pre">.min</span></code>/<code class="docutils literal notranslate"><span class="pre">.max</span></code> when present –
+regardless of whatever already constrained the request’s origin (e.g. a web
+UI). A job with an unauthorized or out-of-bounds override is marked
+<code class="docutils literal notranslate"><span class="pre">startup</span> <span class="pre">error</span></code> rather than silently run with different resources than
+requested, or with the override silently dropped.</p>
+<p>If a job needs to be resubmitted (see above), the same override is reused
+for every attempt – it isn’t re-validated against a config that might have
+changed in the meantime, since the section was already validated against at
+submission time.</p>
+<p>This ini format is implemented in <code class="docutils literal notranslate"><span class="pre">seamm_slurm.config</span></code> (not
+<code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> itself), specifically so other, more lightweight
+consumers – a future job-submission UI, for instance – can read and
+validate it without depending on the rest of the SEAMM stack.</p>
+</section>
+<section id="not-yet-supported">
+<h3>Not yet supported<a class="headerlink" href="#not-yet-supported" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>Routing a job to a <em>specific</em> section when a config file has more than
+one (all jobs currently use the <code class="docutils literal notranslate"><span class="pre">[DEFAULT]</span></code> section) – <code class="docutils literal notranslate"><span class="pre">parameters</span>
+<span class="pre">[&quot;slurm&quot;]</span></code> is expected to gain a <code class="docutils literal notranslate"><span class="pre">&quot;section&quot;</span></code> key for this eventually.</p></li>
+<li><p>Per-step SLURM submission (only whole-flowchart submission exists today).</p></li>
+</ul>
+</section>
+</section>
 <section id="index">
 <h2>Index<a class="headerlink" href="#index" title="Link to this heading">#</a></h2>
 <ul class="simple">
@@ -535,20 +707,27 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     class="page-toc tocsection onthispage">
     <i class="fa-solid fa-list"></i> On this page
   </div>
-  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
-    <ul class="visible nav section-nav flex-column">
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#slurm-submission">SLURM submission</a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#enabling-it">Enabling it</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-happens">What happens</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-job-resource-overrides">Per-job resource overrides</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#not-yet-supported">Not yet supported</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#index">Index</a></li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
-  <div role="note" aria-label="source link">
-    <h3>This Page</h3>
-    <ul class="this-page-menu">
-      <li><a href="../_sources/user_guide/index.rst.txt"
-            rel="nofollow">Show Source</a></li>
-    </ul>
-   </div></div>
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/index.rst.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
 
 </div></div>
               
@@ -563,8 +742,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
-<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+  <script defer src="../_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -576,7 +755,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.20.0.
 </p></div>
       
     </div>
