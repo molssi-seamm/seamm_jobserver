@@ -1053,3 +1053,19 @@ Status log
   `seamm_slurm #4 <https://github.com/molssi-seamm/seamm_slurm/pull/4>`_,
   `seamm_exec #31 <https://github.com/molssi-seamm/seamm_exec/pull/31>`_.
   Not merged or released -- that's ``seamm``'s manual step.
+- **2026-08-08 (all three merged and released, campaign complete)** -- All
+  three PRs merged by ``seamm`` within the same session. ``seamm_slurm``
+  and ``seamm_exec`` released as ``2026.8.8`` first (both confirmed live
+  on PyPI, local checkouts synced via ``make update``); ``seamm_jobserver``
+  had to wait, since its ``requirements.txt`` has no version pin on
+  ``seamm_slurm`` and its own tests import ``seamm_slurm.stage`` for
+  real (not mocked) -- CI would have pulled the old PyPI release lacking
+  that module otherwise. Once ``seamm_slurm`` was confirmed live,
+  ``seamm_jobserver``'s CI passed and it was merged; released as
+  ``2026.8.8`` too. Local ``seamm_jobserver`` checkout synced via
+  ``make update`` immediately after the GitHub Release/tag was created,
+  without waiting for the PyPI publish step of ``Release.yaml`` to finish
+  -- ``make update`` rebuilds from the local git checkout at the tagged
+  commit, it does not install from PyPI, so only the tag needs to exist.
+  **Phase 8 (and the bundled Phase 7) are now fully shipped**: all three
+  packages at ``2026.8.8``, ``dev == main`` in all three local checkouts.
