@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.8.6 documentation</title>
+    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.8.8 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=9f7a9088"></script>
+    <script src="../_static/documentation_options.js?v=d318b753"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="seamm_jobserver" href="modules.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.6" />
+  <meta name="docsearch:version" content="2026.8.8" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -540,6 +540,23 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <dd><p>Check the database for new jobs that are runnable.</p>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="seamm_jobserver.jobserver.JobServer.check_for_stopped_jobs">
+<span class="sig-name descname"><span class="pre">check_for_stopped_jobs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#JobServer.check_for_stopped_jobs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer.check_for_stopped_jobs" title="Link to this definition">#</a></dt>
+<dd><p>Look for jobs that should be actively stopped: either their
+datastore row vanished entirely (deleted, e.g. via the dashboard),
+or their status was explicitly set to <code class="docutils literal notranslate"><span class="pre">kill</span></code> (stop the run but
+leave the job’s files/row alone, unlike delete).</p>
+<p>Before SLURM, a deleted job’s files disappeared but nothing told
+the local subprocess to stop – it just ran on until it crashed on
+the missing files. On a scheduler that is not good enough: an
+orphaned SLURM job can sit running (or queued) for hours. So every
+poll cycle, before <code class="docutils literal notranslate"><span class="pre">check_for_finished_jobs</span></code> gets a chance to
+treat a just-killed job as merely lost and try to resubmit it, this
+checks every job actually being tracked and every <code class="docutils literal notranslate"><span class="pre">kill</span></code>-status
+row, and issues the real <code class="docutils literal notranslate"><span class="pre">scancel</span></code>/process-kill.</p>
+</dd></dl>
+
 <dl class="py property">
 <dt class="sig sig-object py" id="seamm_jobserver.jobserver.JobServer.db">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">db</span></span><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer.db" title="Link to this definition">#</a></dt>
@@ -738,6 +755,7 @@ JobServer for the SEAMM environment.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer"><code class="docutils literal notranslate"><span class="pre">JobServer</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.check_for_finished_jobs"><code class="docutils literal notranslate"><span class="pre">JobServer.check_for_finished_jobs()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.check_for_new_jobs"><code class="docutils literal notranslate"><span class="pre">JobServer.check_for_new_jobs()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.check_for_stopped_jobs"><code class="docutils literal notranslate"><span class="pre">JobServer.check_for_stopped_jobs()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.db"><code class="docutils literal notranslate"><span class="pre">JobServer.db</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.db_path"><code class="docutils literal notranslate"><span class="pre">JobServer.db_path</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.gui_about"><code class="docutils literal notranslate"><span class="pre">JobServer.gui_about()</span></code></a></li>

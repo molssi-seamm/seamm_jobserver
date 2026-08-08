@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.8.6 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.8.8 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=9f7a9088"></script>
+    <script src="../_static/documentation_options.js?v=d318b753"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Getting Started" href="../getting_started/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.6" />
+  <meta name="docsearch:version" content="2026.8.8" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -537,6 +537,8 @@ not yet implemented, see below):</p>
 <span class="na">transport</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">local</span>
 <span class="c1"># only used when transport = ssh</span>
 <span class="c1"># host = molssi10</span>
+<span class="c1"># See &quot;No shared filesystem&quot; below for remote_root/</span>
+<span class="c1"># remote_run_from_jobserver/remote_conda_env, also ssh-only.</span>
 
 <span class="c1"># SLURM submission directives -- each becomes an `#SBATCH --flag=value`</span>
 <span class="c1"># line. Any key not listed here is still passed through, converting</span>
@@ -567,12 +569,12 @@ automatically and <code class="docutils literal notranslate"><span class="pre">d
 <h3>What happens<a class="headerlink" href="#what-happens" title="Link to this heading">#</a></h3>
 <p>When a job comes up for submission, the JobServer builds a script wrapping
 the same <code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code> command it would otherwise run directly –
-no <code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">activate</span></code> or other shell setup is needed, since the command
-already uses the full path to the active Python environment’s
-<code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code>, and SLURM inherits the submitting environment by
-default. The script is submitted via <code class="docutils literal notranslate"><span class="pre">sbatch</span></code>’s standard input (not
-written to a file the target host needs to see – this also works if
-<code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> and there’s no shared filesystem with the cluster). A
+no <code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">activate</span></code> or other shell setup is needed for <code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span>
+<span class="pre">local</span></code>, since the command already uses the full path to the active Python
+environment’s <code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code>, and SLURM inherits the submitting
+environment by default. (<code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> is different – see “No
+shared filesystem” below.) The script is submitted via <code class="docutils literal notranslate"><span class="pre">sbatch</span></code>’s
+standard input, not written to a file the target host needs to see. A
 copy is also saved to the job’s own working directory, as
 <code class="docutils literal notranslate"><span class="pre">slurm_submit.sh</span></code>, for reference.</p>
 <p>The job’s datastore row records the returned SLURM job ID (in its
@@ -580,17 +582,18 @@ copy is also saved to the job’s own working directory, as
 a local process ID. From then on, SLURM is the source of truth for whether
 the job is still pending, running, or finished – the JobServer polls
 <code class="docutils literal notranslate"><span class="pre">squeue</span></code>/<code class="docutils literal notranslate"><span class="pre">sacct</span></code> rather than watching a local process.</p>
-<p>If a job’s own flowchart run finishes normally (successfully or not), it
-writes its own final status to the datastore directly, exactly as in local
-mode – the JobServer doesn’t need to do anything further. The JobServer
-only steps in if a tracked job’s SLURM state goes missing or terminal while
-its datastore row still says <code class="docutils literal notranslate"><span class="pre">running</span></code> – meaning the run never got a
-chance to record its own outcome (a node failure, an out-of-memory kill, a
-cancellation, SLURM losing the record entirely, or the JobServer itself
-having been restarted). In that case it:</p>
+<p>Unlike the running flowchart itself, the JobServer – not the job – is
+what writes a job’s final status to the datastore, in both SLURM and
+local-subprocess mode. (The job still writes its own <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> in
+its working directory, same as always; the JobServer just reads that back
+rather than trusting the job to reach the datastore directly, which isn’t
+even possible for a job dispatched to a remote host with no shared
+filesystem.) Once SLURM reports a job’s state as terminal (or has no
+record of it at all), the JobServer:</p>
 <ol class="arabic simple">
-<li><p>Trusts the job’s own <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> if the run got far enough to write
-one, rather than resubmitting needlessly.</p></li>
+<li><p>Trusts the job’s own <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> if the run got far enough to
+write one, and writes that outcome (<code class="docutils literal notranslate"><span class="pre">finished</span></code>/<code class="docutils literal notranslate"><span class="pre">error</span></code>) to the
+datastore.</p></li>
 <li><p>Otherwise resubmits, up to <code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code> times – safe because
 flowcharts checkpoint completed steps and resume from the first
 incomplete one, so a resubmitted run picks up where it left off rather
@@ -601,6 +604,53 @@ than starting over.</p></li>
 JobServer itself restarts (it re-checks every job still marked <code class="docutils literal notranslate"><span class="pre">running</span></code>
 against SLURM on startup) – restarting the JobServer does not lose track of
 or duplicate submissions for jobs that are still genuinely alive in SLURM.</p>
+</section>
+<section id="no-shared-filesystem">
+<h3>No shared filesystem<a class="headerlink" href="#no-shared-filesystem" title="Link to this heading">#</a></h3>
+<p>If the JobServer doesn’t share a filesystem with the SLURM cluster at all
+– for example, it runs on a laptop reaching a remote cluster over ssh –
+<code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> alone isn’t enough: the remote host can’t see the
+job’s working directory, and there’s no local Python environment path for
+it to invoke either. Two more options in the same ini section (both
+<code class="docutils literal notranslate"><span class="pre">ssh</span></code>-only) handle this:</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[molssi10]</span>
+<span class="na">transport</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ssh</span>
+<span class="na">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">molssi10</span>
+
+<span class="c1"># Base directory on the remote host under which each job gets its own</span>
+<span class="c1"># scratch directory (named after the job&#39;s own directory, e.g.</span>
+<span class="c1"># Job_000123) -- created automatically, no need to pre-create it.</span>
+<span class="na">remote_root</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">/home/psaxe/seamm_remote_jobs</span>
+
+<span class="c1"># How to invoke run_from_jobserver on the remote host. Prefer an</span>
+<span class="c1"># explicit absolute path (no shell/conda activation needed, same as</span>
+<span class="c1"># local mode):</span>
+<span class="na">remote_run_from_jobserver</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">/home/psaxe/miniconda3/envs/seamm/bin/run_from_jobserver</span>
+<span class="c1"># ...or, if that path isn&#39;t known/stable, fall back to a conda</span>
+<span class="c1"># environment name (requires `conda` on PATH for the non-interactive</span>
+<span class="c1"># ssh session sbatch runs under):</span>
+<span class="c1"># remote_conda_env = seamm</span>
+</pre></div>
+</div>
+<p>Before submission, the job’s working directory is pushed to
+<code class="docutils literal notranslate"><span class="pre">&lt;remote_root&gt;/&lt;job</span> <span class="pre">directory</span> <span class="pre">name&gt;</span></code> on the remote host (over
+<code class="docutils literal notranslate"><span class="pre">rsync</span> <span class="pre">-e</span> <span class="pre">ssh</span></code>); the <code class="docutils literal notranslate"><span class="pre">#SBATCH</span> <span class="pre">--chdir</span></code> directive and the command line
+built for the job both use that remote path, not the local one. Once
+SLURM reports the job terminal, the same directory is pulled back before
+the JobServer reads <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> – so results (structures, logs,
+<code class="docutils literal notranslate"><span class="pre">references.db</span></code>, …) end up in the job’s ordinary local directory same
+as any other job. A transfer failure at either point is treated as
+transient and retried the next poll cycle, not recorded as the job
+having failed.</p>
+<p>Referenced input files need no special handling here – a flowchart
+control parameter of type <code class="docutils literal notranslate"><span class="pre">file</span></code> is already staged into the job’s own
+<code class="docutils literal notranslate"><span class="pre">data/</span></code> directory (with its path on the command line rewritten to
+<code class="docutils literal notranslate"><span class="pre">job:data/...</span></code>) at submission time, before the JobServer ever sees the
+job, so the job’s working directory is already self-contained by the time
+staging runs. The one thing this does <em>not</em> handle is a <code class="docutils literal notranslate"><span class="pre">job://&lt;n&gt;/...</span></code>
+cross-job file reference (e.g. reading another job’s checkpoint) – that
+points outside the referencing job’s own working directory and will fail
+to resolve on the remote host.</p>
 </section>
 <section id="per-job-resource-overrides">
 <h3>Per-job resource overrides<a class="headerlink" href="#per-job-resource-overrides" title="Link to this heading">#</a></h3>
@@ -651,8 +701,37 @@ validate it without depending on the rest of the SEAMM stack.</p>
 one (all jobs currently use the <code class="docutils literal notranslate"><span class="pre">[DEFAULT]</span></code> section) – <code class="docutils literal notranslate"><span class="pre">parameters</span>
 <span class="pre">[&quot;slurm&quot;]</span></code> is expected to gain a <code class="docutils literal notranslate"><span class="pre">&quot;section&quot;</span></code> key for this eventually.</p></li>
 <li><p>Per-step SLURM submission (only whole-flowchart submission exists today).</p></li>
+<li><p>A retry cap on stage-out transfer failures for a “no shared filesystem”
+section, separate from <code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code> – today a permanently
+unreachable remote host would retry indefinitely rather than eventually
+giving up.</p></li>
 </ul>
 </section>
+</section>
+<section id="stopping-a-job">
+<h2>Stopping a job<a class="headerlink" href="#stopping-a-job" title="Link to this heading">#</a></h2>
+<p>This applies in both local-subprocess and SLURM mode. The JobServer checks
+for two things every poll cycle, for every job it is actively tracking:</p>
+<ol class="arabic simple">
+<li><p><strong>The job’s datastore row was deleted.</strong> Deleting a job (e.g. via the
+dashboard) removes its row and files, but by itself does not touch
+whatever is actually running it. The JobServer notices the row is gone
+and actively stops the run – <code class="docutils literal notranslate"><span class="pre">scancel</span></code> in SLURM mode, terminating the
+process in local mode – rather than leaving it to run on until it
+crashes on its own missing files (or, on a cluster, sits consuming a
+node for however long that takes).</p></li>
+<li><p><strong>The job’s ``status`` was set to ``kill``.</strong> This stops the run the same
+way, but – unlike deleting the job – leaves its row and files alone.
+Any client can request this with an ordinary status update (e.g. the
+dashboard’s existing job-update endpoint); no new API is needed. Once
+the JobServer has stopped the job, it sets <code class="docutils literal notranslate"><span class="pre">status</span></code> to <code class="docutils literal notranslate"><span class="pre">killed</span></code>. A
+job that is asked to stop before the JobServer ever started it (still
+<code class="docutils literal notranslate"><span class="pre">submitted</span></code>) is simply finalized as <code class="docutils literal notranslate"><span class="pre">killed</span></code> directly.</p></li>
+</ol>
+<p>Both checks also run as part of startup reattachment, so a kill requested
+right before the JobServer restarts is not lost – it stops the job (or
+finalizes it as <code class="docutils literal notranslate"><span class="pre">killed</span></code>, if it had already ended) instead of resuming
+tracking or, worse, resubmitting it as if it had merely gone missing.</p>
 </section>
 <section id="index">
 <h2>Index<a class="headerlink" href="#index" title="Link to this heading">#</a></h2>
@@ -712,10 +791,12 @@ one (all jobs currently use the <code class="docutils literal notranslate"><span
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#slurm-submission">SLURM submission</a><ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#enabling-it">Enabling it</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-happens">What happens</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#no-shared-filesystem">No shared filesystem</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-job-resource-overrides">Per-job resource overrides</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#not-yet-supported">Not yet supported</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#stopping-a-job">Stopping a job</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#index">Index</a></li>
 </ul>
   </nav></div>

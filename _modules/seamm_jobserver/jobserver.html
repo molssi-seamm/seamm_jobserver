@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.8.6 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.8.8 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=9f7a9088"></script>
+    <script src="../../_static/documentation_options.js?v=d318b753"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -61,7 +61,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="search" title="Search" href="../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.6" />
+  <meta name="docsearch:version" content="2026.8.8" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -495,7 +495,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span><span class="p">,</span> <span class="n">PurePosixPath</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">psutil</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">shlex</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
@@ -510,6 +510,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="kn">import</span><span class="w"> </span><span class="nn">seamm_util</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_slurm.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_slurm_config</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_slurm.script</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_script</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_slurm.stage</span><span class="w"> </span><span class="kn">import</span> <span class="n">StageError</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 <span class="c1"># logger.setLevel(logging.DEBUG)</span>
@@ -588,6 +589,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="bp">self</span><span class="o">.</span><span class="n">successful_jobs</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ended_jobs</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">killed_jobs</span> <span class="o">=</span> <span class="mi">0</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_db</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_db_path</span> <span class="o">=</span> <span class="kc">None</span>
@@ -595,6 +597,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_slurm_backend</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stager</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_tk_root</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_after_id</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_status_id</span> <span class="o">=</span> <span class="kc">None</span>
@@ -644,6 +647,73 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <span class="k">def</span><span class="w"> </span><span class="nf">db</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_db</span>
 
+<div class="viewcode-block" id="JobServer.check_for_stopped_jobs">
+<a class="viewcode-back" href="../../api/seamm_jobserver.html#seamm_jobserver.jobserver.JobServer.check_for_stopped_jobs">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">check_for_stopped_jobs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Look for jobs that should be actively stopped: either their</span>
+<span class="sd">        datastore row vanished entirely (deleted, e.g. via the dashboard),</span>
+<span class="sd">        or their status was explicitly set to ``kill`` (stop the run but</span>
+<span class="sd">        leave the job&#39;s files/row alone, unlike delete).</span>
+
+<span class="sd">        Before SLURM, a deleted job&#39;s files disappeared but nothing told</span>
+<span class="sd">        the local subprocess to stop -- it just ran on until it crashed on</span>
+<span class="sd">        the missing files. On a scheduler that is not good enough: an</span>
+<span class="sd">        orphaned SLURM job can sit running (or queued) for hours. So every</span>
+<span class="sd">        poll cycle, before ``check_for_finished_jobs`` gets a chance to</span>
+<span class="sd">        treat a just-killed job as merely lost and try to resubmit it, this</span>
+<span class="sd">        checks every job actually being tracked and every ``kill``-status</span>
+<span class="sd">        row, and issues the real ``scancel``/process-kill.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">:</span>
+            <span class="n">job_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+            <span class="n">placeholders</span> <span class="o">=</span> <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">&quot;?&quot;</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">job_ids</span><span class="p">))</span>
+            <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+            <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT id FROM jobs WHERE id IN (</span><span class="si">{</span><span class="n">placeholders</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">job_ids</span><span class="p">)</span>
+            <span class="n">present</span> <span class="o">=</span> <span class="p">{</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()}</span>
+            <span class="k">for</span> <span class="n">job_id</span> <span class="ow">in</span> <span class="n">job_ids</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">job_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">present</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">&#39;s datastore row was deleted; stopping it.&quot;</span>
+                    <span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_stop_running_job</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span>
+
+        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT id FROM jobs WHERE status = &#39;kill&#39;&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">job_id</span><span class="p">,)</span> <span class="ow">in</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">job_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> was asked to stop; stopping it.&quot;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_stop_running_job</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="s2">&quot;killed&quot;</span><span class="p">,</span> <span class="n">expected_current</span><span class="o">=</span><span class="s2">&quot;kill&quot;</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_stop_running_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Actively terminate a tracked job&#39;s local process, or cancel its</span>
+<span class="sd">        SLURM job, and stop tracking it here. Does not touch the datastore</span>
+<span class="sd">        row -- callers decide what, if anything, to write there.&quot;&quot;&quot;</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_times</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">killed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;mode&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;local&quot;</span><span class="p">:</span>
+            <span class="n">process</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;process&quot;</span><span class="p">]</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">process</span><span class="o">.</span><span class="n">terminate</span><span class="p">()</span>
+                <span class="n">process</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">psutil</span><span class="o">.</span><span class="n">TimeoutExpired</span><span class="p">:</span>
+                <span class="n">process</span><span class="o">.</span><span class="n">kill</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error stopping local job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">slurm_id</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;slurm_job_id&quot;</span><span class="p">]</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_slurm_backend</span><span class="o">.</span><span class="n">cancel</span><span class="p">(</span><span class="n">slurm_id</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Error cancelling SLURM job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+
 <div class="viewcode-block" id="JobServer.check_for_finished_jobs">
 <a class="viewcode-back" href="../../api/seamm_jobserver.html#seamm_jobserver.jobserver.JobServer.check_for_finished_jobs">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">check_for_finished_jobs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -655,7 +725,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_check_for_finished_jobs_local</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check whether locally-run (non-SLURM) jobs have finished.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check whether locally-run (non-SLURM) jobs have finished, and</span>
+<span class="sd">        finalize their datastore status here -- the job&#39;s own process no</span>
+<span class="sd">        longer writes it directly (see Phase 8 in the campaign doc: the</span>
+<span class="sd">        JobServer, not the job, now owns every terminal status write, the</span>
+<span class="sd">        same as SLURM mode already required).&quot;&quot;&quot;</span>
         <span class="n">finished</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="n">pid</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;pid&quot;</span><span class="p">]</span>
@@ -668,24 +742,50 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <span class="n">is_running</span> <span class="o">=</span> <span class="kc">False</span>
             <span class="k">if</span> <span class="n">is_running</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> is running as process </span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="n">finished</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span>
+
+            <span class="c1"># Trust job_data.json -- the flowchart&#39;s own conclusion --</span>
+            <span class="c1"># over the exit code when both are available; the exit code is</span>
+            <span class="c1"># only a fallback for a hard crash that never got to write it.</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_job_data_state</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;wdir&quot;</span><span class="p">])</span>
+            <span class="n">bucket</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> finished (</span><span class="si">{</span><span class="n">pid</span><span class="si">=}</span><span class="s2">) -&gt; </span><span class="si">{</span><span class="n">state</span><span class="si">!r}</span><span class="s2">.&quot;</span><span class="p">)</span>
+                <span class="n">bucket</span> <span class="o">=</span> <span class="s2">&quot;successful&quot;</span> <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="s2">&quot;finished&quot;</span> <span class="k">else</span> <span class="s2">&quot;failed&quot;</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">finished</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span>
                 <span class="k">try</span><span class="p">:</span>
-                    <span class="n">status</span> <span class="o">=</span> <span class="n">process</span><span class="o">.</span><span class="n">returncode</span>
+                    <span class="n">returncode</span> <span class="o">=</span> <span class="n">process</span><span class="o">.</span><span class="n">returncode</span>
                 <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-                    <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> finished, code=</span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">status</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">returncode</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: no job_data.json, code=</span><span class="si">{</span><span class="n">returncode</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">returncode</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">returncode</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;finished&quot;</span>
+                    <span class="n">bucket</span> <span class="o">=</span> <span class="s2">&quot;successful&quot;</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> finished successfully (</span><span class="si">{</span><span class="n">pid</span><span class="si">=}</span><span class="s2">).&quot;</span><span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">successful_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
-                <span class="k">elif</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;unknown&quot;</span><span class="p">:</span>
+                <span class="k">elif</span> <span class="n">returncode</span> <span class="o">==</span> <span class="s2">&quot;unknown&quot;</span><span class="p">:</span>
+                    <span class="c1"># Can&#39;t confirm success -- write &quot;error&quot; so the row</span>
+                    <span class="c1"># doesn&#39;t stay stuck at &quot;running&quot; forever, but keep it</span>
+                    <span class="c1"># in its own counter bucket since it&#39;s not a confirmed</span>
+                    <span class="c1"># failure either.</span>
+                    <span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;error&quot;</span>
+                    <span class="n">bucket</span> <span class="o">=</span> <span class="s2">&quot;ended&quot;</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                         <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> finished with unknown status (</span><span class="si">{</span><span class="n">pid</span><span class="si">=}</span><span class="s2">).&quot;</span>
                     <span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">ended_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> failed (</span><span class="si">{</span><span class="n">pid</span><span class="si">=}</span><span class="s2"> </span><span class="si">{</span><span class="n">status</span><span class="si">=}</span><span class="s2">).&quot;</span><span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;error&quot;</span>
+                    <span class="n">bucket</span> <span class="o">=</span> <span class="s2">&quot;failed&quot;</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> failed (</span><span class="si">{</span><span class="n">pid</span><span class="si">=}</span><span class="s2"> </span><span class="si">{</span><span class="n">returncode</span><span class="si">=}</span><span class="s2">).&quot;</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">bucket</span> <span class="o">==</span> <span class="s2">&quot;successful&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">successful_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">elif</span> <span class="n">bucket</span> <span class="o">==</span> <span class="s2">&quot;ended&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ended_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
         <span class="k">for</span> <span class="n">job_id</span> <span class="ow">in</span> <span class="n">finished</span><span class="p">:</span>
             <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
             <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_times</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
@@ -694,11 +794,16 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Check whether SLURM-submitted jobs have finished.</span>
 
 <span class="sd">        SLURM is the source of truth for *whether* a job has finished; the</span>
-<span class="sd">        job&#39;s own ``run_from_jobserver`` process still writes the datastore&#39;s</span>
-<span class="sd">        final status (``finished``/``error``) directly when it exits</span>
-<span class="sd">        normally, exactly as in local mode -- nothing to duplicate here in</span>
-<span class="sd">        the common case. Only reconciles (trusts ``job_data.json``, or</span>
-<span class="sd">        resubmits, or gives up) when that never happened.</span>
+<span class="sd">        JobServer is the sole writer of the datastore&#39;s terminal status for</span>
+<span class="sd">        every job (see Phase 8 in the campaign doc -- the job&#39;s own process</span>
+<span class="sd">        used to write this directly, which both duplicated this logic and</span>
+<span class="sd">        cannot work at all once a job may run on a host with no access to</span>
+<span class="sd">        the datastore&#39;s sqlite file). ``_finalize_or_resubmit_slurm_job``</span>
+<span class="sd">        does the actual finalize-or-resubmit work, trusting</span>
+<span class="sd">        ``job_data.json`` over SLURM&#39;s own completed/failed category when</span>
+<span class="sd">        both are available -- SLURM reporting a job &quot;completed&quot; only means</span>
+<span class="sd">        the process exited 0, not that the flowchart itself considered the</span>
+<span class="sd">        run successful.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">:</span>
             <span class="k">return</span>
@@ -706,9 +811,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="n">id_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;slurm_job_id&quot;</span><span class="p">]:</span> <span class="n">job_id</span> <span class="k">for</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
         <span class="n">statuses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm_backend</span><span class="o">.</span><span class="n">poll_many</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">id_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
 
-        <span class="c1"># Snapshot: _reconcile_stalled_job may resubmit, which mutates</span>
-        <span class="c1"># self._jobs/_times for job_id in place (new slurm_job_id) -- don&#39;t</span>
-        <span class="c1"># iterate the live dict while that happens.</span>
+        <span class="c1"># Snapshot: _finalize_or_resubmit_slurm_job may resubmit, which</span>
+        <span class="c1"># mutates self._jobs/_times for job_id in place (new slurm_job_id)</span>
+        <span class="c1"># -- don&#39;t iterate the live dict while that happens.</span>
         <span class="n">finished</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
             <span class="n">slurm_id</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;slurm_job_id&quot;</span><span class="p">]</span>
@@ -731,13 +836,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <span class="sa">f</span><span class="s2">&quot;state </span><span class="si">{</span><span class="n">status</span><span class="o">.</span><span class="n">state</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">status</span><span class="o">.</span><span class="n">category</span><span class="si">}</span><span class="s2">).&quot;</span>
                 <span class="p">)</span>
 
-            <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">status</span><span class="o">.</span><span class="n">category</span> <span class="o">==</span> <span class="s2">&quot;completed&quot;</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">successful_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
-
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;running&quot;</span><span class="p">:</span>
-                <span class="n">resubmitted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reconcile_stalled_job</span><span class="p">(</span>
+                <span class="n">resubmitted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_or_resubmit_slurm_job</span><span class="p">(</span>
                     <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;resubmit_count&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
                 <span class="p">)</span>
                 <span class="k">if</span> <span class="n">resubmitted</span><span class="p">:</span>
@@ -782,50 +882,71 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">None</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_finalize_job_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">status</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Force a job&#39;s datastore status, but only if it is still</span>
-<span class="sd">        ``running`` -- avoids clobbering a status the job&#39;s own process</span>
-<span class="sd">        already wrote (e.g. a race between polling and its own exit).&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_finalize_job_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span> <span class="n">expected_current</span><span class="o">=</span><span class="s2">&quot;running&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Force a job&#39;s datastore status, but only if it still has the</span>
+<span class="sd">        expected current status -- avoids clobbering a status something</span>
+<span class="sd">        else (the job&#39;s own process, another poll cycle) already wrote.&quot;&quot;&quot;</span>
         <span class="n">current_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
         <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
         <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-            <span class="s2">&quot;UPDATE jobs SET status = ?, finished = ?&quot;</span>
-            <span class="s2">&quot; WHERE id = ? AND status = &#39;running&#39;&quot;</span><span class="p">,</span>
-            <span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="n">current_time</span><span class="p">,</span> <span class="n">job_id</span><span class="p">),</span>
+            <span class="s2">&quot;UPDATE jobs SET status = ?, finished = ?&quot;</span> <span class="s2">&quot; WHERE id = ? AND status = ?&quot;</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="n">current_time</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">expected_current</span><span class="p">),</span>
         <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_reconcile_stalled_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">resubmit_count</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handle a job whose datastore row is still ``running`` even though</span>
-<span class="sd">        SLURM no longer shows it as pending/running (it reached a terminal</span>
-<span class="sd">        state, or SLURM has no record of it at all).</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_finalize_or_resubmit_slurm_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">resubmit_count</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Finalize a SLURM job&#39;s datastore status now that SLURM reports it</span>
+<span class="sd">        terminal (or has no record of it at all), or resubmit it if there&#39;s</span>
+<span class="sd">        nothing yet to finalize from.</span>
+
+<span class="sd">        For a ``transport = ssh`` job (``data[&quot;remote_wdir&quot;]`` set), the</span>
+<span class="sd">        remote working directory is pulled back to ``wdir`` first (via</span>
+<span class="sd">        ``self._stager``), so ``job_data.json`` and the flowchart&#39;s own</span>
+<span class="sd">        results land where the JobServer -- and the dashboard -- can see</span>
+<span class="sd">        them. A stage-out failure is a transient transfer problem, not a</span>
+<span class="sd">        job failure: it&#39;s worth a retry next poll cycle, not conflated</span>
+<span class="sd">        with the resubmit-count logic below (which is about SLURM losing</span>
+<span class="sd">        track of the job entirely, a different failure mode).</span>
 
 <span class="sd">        First choice: trust ``job_data.json`` if the flowchart&#39;s own process</span>
-<span class="sd">        managed to write one -- avoids a needless resubmit when the run</span>
-<span class="sd">        actually finished (successfully or not) but its own direct sqlite</span>
-<span class="sd">        write raced or failed. Falls back to resubmitting, up to</span>
-<span class="sd">        ``max_resubmits``, since flowcharts checkpoint completed steps and</span>
-<span class="sd">        safely resume (see the design plan); beyond the cap, gives up and</span>
-<span class="sd">        marks the job ``error``.</span>
+<span class="sd">        managed to write one -- this is the common case (a normal finish),</span>
+<span class="sd">        not just a stalled-job fallback, since the JobServer is now the</span>
+<span class="sd">        only thing that writes the datastore&#39;s terminal status. Falls back</span>
+<span class="sd">        to resubmitting, up to ``max_resubmits``, since flowcharts</span>
+<span class="sd">        checkpoint completed steps and safely resume (see the design plan);</span>
+<span class="sd">        beyond the cap, gives up and marks the job ``error``.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        bool</span>
-<span class="sd">            True if the job was resubmitted -- meaning ``self._jobs[job_id]``</span>
-<span class="sd">            and ``self._times[job_id]`` were just replaced with fresh</span>
-<span class="sd">            tracking data by ``_start_job_slurm`` and callers must not then</span>
-<span class="sd">            delete them. False if the job was finalized (finished/error) and</span>
+<span class="sd">            True if the job should stay tracked -- either resubmitted</span>
+<span class="sd">            (``self._jobs[job_id]``/``self._times[job_id]`` were just</span>
+<span class="sd">            replaced with fresh tracking data by ``_start_job_slurm``) or a</span>
+<span class="sd">            stage-out failure worth retrying next cycle (tracking data left</span>
+<span class="sd">            untouched). False if the job was finalized (finished/error) and</span>
 <span class="sd">            is no longer tracked here.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">wdir</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;wdir&quot;</span><span class="p">]</span>
+        <span class="n">remote_wdir</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;remote_wdir&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">remote_wdir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_stager</span><span class="o">.</span><span class="n">stage_out</span><span class="p">(</span><span class="n">remote_wdir</span><span class="p">,</span> <span class="n">wdir</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">StageError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: stage_out from </span><span class="si">{</span><span class="n">remote_wdir</span><span class="si">}</span><span class="s2"> failed, &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;will retry next poll cycle: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">True</span>
 
         <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_job_data_state</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: SLURM lost track of it, but job_data.json &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;says &#39;</span><span class="si">{</span><span class="n">state</span><span class="si">}</span><span class="s2">&#39; -- trusting that over resubmitting.&quot;</span>
-            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: finalizing as </span><span class="si">{</span><span class="n">state</span><span class="si">!r}</span><span class="s2"> (job_data.json).&quot;</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="s2">&quot;finished&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">successful_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
             <span class="k">return</span> <span class="kc">False</span>
 
         <span class="n">max_resubmits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">max_resubmits</span>
@@ -835,6 +956,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <span class="s2">&quot;(SLURM lost track of it and no job_data.json was written).&quot;</span>
             <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="s2">&quot;error&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
             <span class="k">return</span> <span class="kc">False</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
@@ -844,7 +966,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="bp">self</span><span class="o">.</span><span class="n">_start_job_slurm</span><span class="p">(</span>
             <span class="n">job_id</span><span class="p">,</span>
             <span class="n">wdir</span><span class="p">,</span>
-            <span class="n">data</span><span class="p">[</span><span class="s2">&quot;cmd&quot;</span><span class="p">],</span>
+            <span class="n">data</span><span class="p">[</span><span class="s2">&quot;cmdline&quot;</span><span class="p">],</span>
             <span class="n">resubmit_count</span><span class="o">=</span><span class="n">resubmit_count</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
             <span class="n">slurm_overrides</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;slurm_overrides&quot;</span><span class="p">),</span>
         <span class="p">)</span>
@@ -1048,6 +1170,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">stop</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_tk_root</span><span class="o">.</span><span class="n">quit</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">check_for_stopped_jobs</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">check_for_finished_jobs</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">check_for_new_jobs</span><span class="p">()</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -1090,6 +1213,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="n">text</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="s2">&quot;end&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;                started: </span><span class="si">{</span><span class="n">status</span><span class="p">[</span><span class="s1">&#39;total jobs&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">4d</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="n">text</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="s2">&quot;end&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot; completed successfully: </span><span class="si">{</span><span class="n">status</span><span class="p">[</span><span class="s1">&#39;successful jobs&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">4d</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="n">text</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="s2">&quot;end&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;                 failed: </span><span class="si">{</span><span class="n">status</span><span class="p">[</span><span class="s1">&#39;failed jobs&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">4d</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">text</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="s2">&quot;end&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;                 killed: </span><span class="si">{</span><span class="n">status</span><span class="p">[</span><span class="s1">&#39;killed jobs&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">4d</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="n">text</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="s2">&quot;end&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;         unknown status: </span><span class="si">{</span><span class="n">status</span><span class="p">[</span><span class="s1">&#39;ended jobs&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">4d</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span><span class="p">)</span>
 
         <span class="c1"># Cpu usage on machine</span>
@@ -1207,6 +1331,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span> <span class="o">=</span> <span class="n">load_slurm_config</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">])</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_slurm_backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">build_backend</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_stager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">build_stager</span><span class="p">()</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;Using SLURM (section &#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;, transport=&quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">transport</span><span class="si">}</span><span class="s2">&#39;) to run jobs, up to &quot;</span>
@@ -1336,6 +1461,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <span class="k">pass</span>
 
                 <span class="k">try</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">check_for_stopped_jobs</span><span class="p">()</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">check_for_finished_jobs</span><span class="p">()</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">check_for_new_jobs</span><span class="p">()</span>
 
@@ -1354,13 +1480,19 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_reattach_local_jobs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;On startup, find any locally-run jobs already in progress.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;On startup, find any locally-run jobs already in progress.</span>
+
+<span class="sd">        Also picks up ``kill``-status rows, not just ``running`` ones: a</span>
+<span class="sd">        job whose kill was requested right before a restart still has a</span>
+<span class="sd">        real process that needs to actually be terminated, not just</span>
+<span class="sd">        forgotten about.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-            <span class="s2">&quot;SELECT id, json_extract(parameters, &#39;$.pid&#39;)&quot;</span>
+            <span class="s2">&quot;SELECT id, status, json_extract(parameters, &#39;$.pid&#39;)&quot;</span>
             <span class="s2">&quot;  FROM jobs&quot;</span>
-            <span class="s2">&quot; WHERE status = &#39;running&#39;&quot;</span>
+            <span class="s2">&quot; WHERE status IN (&#39;running&#39;, &#39;kill&#39;)&quot;</span>
         <span class="p">):</span>
-            <span class="n">job_id</span><span class="p">,</span> <span class="n">pid</span> <span class="o">=</span> <span class="n">row</span>
+            <span class="n">job_id</span><span class="p">,</span> <span class="n">orig_status</span><span class="p">,</span> <span class="n">pid</span> <span class="o">=</span> <span class="n">row</span>
             <span class="k">if</span> <span class="n">pid</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">finished</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="k">else</span><span class="p">:</span>
@@ -1381,16 +1513,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <span class="k">else</span><span class="p">:</span>
                         <span class="n">finished</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="k">if</span> <span class="n">finished</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> already finished (pid=</span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+                <span class="n">final_status</span> <span class="o">=</span> <span class="s2">&quot;killed&quot;</span> <span class="k">if</span> <span class="n">orig_status</span> <span class="o">==</span> <span class="s2">&quot;kill&quot;</span> <span class="k">else</span> <span class="s2">&quot;finished&quot;</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> already </span><span class="si">{</span><span class="n">final_status</span><span class="si">}</span><span class="s2"> (pid=</span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
                 <span class="k">try</span><span class="p">:</span>
                     <span class="n">current_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
                     <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
                     <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
                         <span class="s2">&quot;UPDATE jobs&quot;</span>
-                        <span class="s2">&quot;   SET status = &#39;finished&#39;, finished = ?,&quot;</span>
+                        <span class="s2">&quot;   SET status = ?, finished = ?,&quot;</span>
                         <span class="s2">&quot;       parameters=json_remove(jobs.parameters, &#39;$.pid&#39;)&quot;</span>
                         <span class="s2">&quot; WHERE id = ?&quot;</span><span class="p">,</span>
-                        <span class="p">(</span><span class="n">current_time</span><span class="p">,</span> <span class="n">job_id</span><span class="p">),</span>
+                        <span class="p">(</span><span class="n">final_status</span><span class="p">,</span> <span class="n">current_time</span><span class="p">,</span> <span class="n">job_id</span><span class="p">),</span>
                     <span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
                 <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -1398,6 +1531,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="k">else</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">previous_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> is still running (pid=</span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">orig_status</span> <span class="o">==</span> <span class="s2">&quot;kill&quot;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> was marked for killing before restart; &quot;</span>
+                        <span class="s2">&quot;will stop it on the next poll cycle.&quot;</span>
+                    <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_reattach_slurm_jobs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;On startup, find any SLURM-submitted jobs already in progress.</span>
@@ -1410,27 +1548,33 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="sd">        reconciliation path as the steady-state case (trust job_data.json,</span>
 <span class="sd">        else resubmit up to a cap, else give up) -- safe because flowcharts</span>
 <span class="sd">        checkpoint completed steps and safely resume.</span>
+
+<span class="sd">        Also picks up ``kill``-status rows, not just ``running`` ones -- a</span>
+<span class="sd">        job whose kill was requested right before a restart still needs its</span>
+<span class="sd">        real SLURM job cancelled, not silently resumed or, worse,</span>
+<span class="sd">        resubmitted by the ordinary reconciliation path.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">rows</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-                <span class="s2">&quot;SELECT id, path, json_extract(parameters, &#39;$.slurm_job_id&#39;),&quot;</span>
+                <span class="s2">&quot;SELECT id, status, path, json_extract(parameters, &#39;$.slurm_job_id&#39;),&quot;</span>
                 <span class="s2">&quot;       json_extract(parameters, &#39;$.cmdline&#39;),&quot;</span>
                 <span class="s2">&quot;       json_extract(parameters, &#39;$.resubmit_count&#39;),&quot;</span>
                 <span class="s2">&quot;       json_extract(parameters, &#39;$.slurm&#39;)&quot;</span>
                 <span class="s2">&quot;  FROM jobs&quot;</span>
-                <span class="s2">&quot; WHERE status = &#39;running&#39;&quot;</span>
+                <span class="s2">&quot; WHERE status IN (&#39;running&#39;, &#39;kill&#39;)&quot;</span>
             <span class="p">)</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">rows</span><span class="p">:</span>
             <span class="k">return</span>
 
         <span class="n">ids</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="nb">str</span><span class="p">(</span><span class="n">slurm_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">slurm_id</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rows</span> <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">slurm_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">slurm_id</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rows</span> <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="p">]</span>
         <span class="n">statuses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm_backend</span><span class="o">.</span><span class="n">poll_many</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="k">if</span> <span class="n">ids</span> <span class="k">else</span> <span class="p">{}</span>
 
         <span class="k">for</span> <span class="p">(</span>
             <span class="n">job_id</span><span class="p">,</span>
+            <span class="n">orig_status</span><span class="p">,</span>
             <span class="n">wdir</span><span class="p">,</span>
             <span class="n">slurm_id</span><span class="p">,</span>
             <span class="n">cmdline_json</span><span class="p">,</span>
@@ -1439,27 +1583,51 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="p">)</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
             <span class="n">resubmit_count</span> <span class="o">=</span> <span class="n">resubmit_count</span> <span class="ow">or</span> <span class="mi">0</span>
             <span class="n">cmdline</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">cmdline_json</span><span class="p">)</span> <span class="k">if</span> <span class="n">cmdline_json</span> <span class="k">else</span> <span class="p">[]</span>
-            <span class="n">cmd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_cmd</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">)</span>
             <span class="n">slurm_overrides</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">slurm_overrides_json</span><span class="p">)</span> <span class="k">if</span> <span class="n">slurm_overrides_json</span> <span class="k">else</span> <span class="p">{}</span>
+            <span class="p">)</span>
+            <span class="c1"># Recomputed, not stored: a pure function of wdir + this</span>
+            <span class="c1"># section&#39;s remote_root, so it&#39;s safe to derive fresh here for</span>
+            <span class="c1"># a job reattached after a restart, the same way a freshly</span>
+            <span class="c1"># submitted job gets it from _start_job_slurm.</span>
+            <span class="n">remote_wdir</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_remote_wdir</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">&quot;ssh&quot;</span> <span class="k">else</span> <span class="kc">None</span>
             <span class="p">)</span>
 
             <span class="n">status</span> <span class="o">=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">slurm_id</span><span class="p">))</span> <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">status</span><span class="o">.</span><span class="n">is_terminal</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (slurm_job_id=</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">) is still &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">status</span><span class="o">.</span><span class="n">category</span><span class="si">}</span><span class="s2">.&quot;</span>
-                <span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                     <span class="s2">&quot;mode&quot;</span><span class="p">:</span> <span class="s2">&quot;slurm&quot;</span><span class="p">,</span>
                     <span class="s2">&quot;slurm_job_id&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">slurm_id</span><span class="p">),</span>
                     <span class="s2">&quot;wdir&quot;</span><span class="p">:</span> <span class="n">wdir</span><span class="p">,</span>
-                    <span class="s2">&quot;cmd&quot;</span><span class="p">:</span> <span class="n">cmd</span><span class="p">,</span>
+                    <span class="s2">&quot;remote_wdir&quot;</span><span class="p">:</span> <span class="n">remote_wdir</span><span class="p">,</span>
+                    <span class="s2">&quot;cmdline&quot;</span><span class="p">:</span> <span class="n">cmdline</span><span class="p">,</span>
                     <span class="s2">&quot;resubmit_count&quot;</span><span class="p">:</span> <span class="n">resubmit_count</span><span class="p">,</span>
                     <span class="s2">&quot;slurm_overrides&quot;</span><span class="p">:</span> <span class="n">slurm_overrides</span><span class="p">,</span>
                 <span class="p">}</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_times</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">previous_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">orig_status</span> <span class="o">==</span> <span class="s2">&quot;kill&quot;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (slurm_job_id=</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">) was marked &quot;</span>
+                        <span class="s2">&quot;for killing before restart; will stop it on the &quot;</span>
+                        <span class="s2">&quot;next poll cycle.&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (slurm_job_id=</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">) is still &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">status</span><span class="o">.</span><span class="n">category</span><span class="si">}</span><span class="s2">.&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="k">if</span> <span class="n">orig_status</span> <span class="o">==</span> <span class="s2">&quot;kill&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (slurm_job_id=</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">) was marked for &quot;</span>
+                    <span class="s2">&quot;killing before restart, and is already gone from &quot;</span>
+                    <span class="s2">&quot;SLURM; finalizing as killed.&quot;</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">killed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="s2">&quot;killed&quot;</span><span class="p">,</span> <span class="n">expected_current</span><span class="o">=</span><span class="s2">&quot;kill&quot;</span><span class="p">)</span>
                 <span class="k">continue</span>
 
             <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -1467,9 +1635,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> has no recorded slurm_job_id (JobServer &quot;</span>
                     <span class="s2">&quot;likely died mid-submission).&quot;</span>
                 <span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_reconcile_stalled_job</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_or_resubmit_slurm_job</span><span class="p">(</span>
                 <span class="n">job_id</span><span class="p">,</span>
-                <span class="p">{</span><span class="s2">&quot;wdir&quot;</span><span class="p">:</span> <span class="n">wdir</span><span class="p">,</span> <span class="s2">&quot;cmd&quot;</span><span class="p">:</span> <span class="n">cmd</span><span class="p">,</span> <span class="s2">&quot;slurm_overrides&quot;</span><span class="p">:</span> <span class="n">slurm_overrides</span><span class="p">},</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;wdir&quot;</span><span class="p">:</span> <span class="n">wdir</span><span class="p">,</span>
+                    <span class="s2">&quot;remote_wdir&quot;</span><span class="p">:</span> <span class="n">remote_wdir</span><span class="p">,</span>
+                    <span class="s2">&quot;cmdline&quot;</span><span class="p">:</span> <span class="n">cmdline</span><span class="p">,</span>
+                    <span class="s2">&quot;slurm_overrides&quot;</span><span class="p">:</span> <span class="n">slurm_overrides</span><span class="p">,</span>
+                <span class="p">},</span>
                 <span class="n">resubmit_count</span><span class="p">,</span>
             <span class="p">)</span>
 
@@ -1498,37 +1671,55 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting job </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job_id</span><span class="p">))</span>
 
-        <span class="n">cmd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_cmd</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cmd for </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">cmd</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># _start_job_slurm builds the command itself, after staging</span>
+            <span class="c1"># (transport=ssh) determines the *effective* working directory</span>
+            <span class="c1"># -- _build_cmd needs that, not the local wdir, to be correct.</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_start_job_slurm</span><span class="p">(</span>
-                <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="o">=</span><span class="n">slurm_overrides</span> <span class="ow">or</span> <span class="p">{}</span>
+                <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="o">=</span><span class="n">slurm_overrides</span> <span class="ow">or</span> <span class="p">{}</span>
             <span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">cmd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_cmd</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cmd for </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">cmd</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_start_job_local</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmd</span><span class="p">)</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_build_cmd</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build the ``run_from_jobserver`` command line for a job -- the</span>
 <span class="sd">        same command whether it&#39;s about to be run as a local subprocess or</span>
-<span class="sd">        as the payload of a SLURM batch script.&quot;&quot;&quot;</span>
-        <span class="n">path</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">executable</span>
-        <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">path</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
-            <span class="n">exe</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;run_from_jobserver&quot;</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">exe</span> <span class="o">=</span> <span class="n">shutil</span><span class="o">.</span><span class="n">which</span><span class="p">(</span><span class="s2">&quot;run_from_jobserver&quot;</span><span class="p">)</span>
-        <span class="n">cmd</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">exe</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">job_id</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">wdir</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">db_path</span><span class="p">)]</span>
+<span class="sd">        as the payload of a SLURM batch script.</span>
 
-        <span class="c1"># Check if in docker container</span>
-        <span class="n">cgroup</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/proc/self/cgroup&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="p">(</span>
-            <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/.dockerenv&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span>
-            <span class="ow">or</span> <span class="n">cgroup</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span>
-            <span class="ow">and</span> <span class="s2">&quot;docker&quot;</span> <span class="ow">in</span> <span class="n">cgroup</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span>
-        <span class="p">):</span>
-            <span class="n">cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;--executor&quot;</span><span class="p">)</span>
-            <span class="n">cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;docker&quot;</span><span class="p">)</span>
+<span class="sd">        ``wdir`` should already be the *effective* working directory the</span>
+<span class="sd">        job will actually run in -- the remote-staged path for a</span>
+<span class="sd">        ``transport = ssh`` SLURM section, or the ordinary local path</span>
+<span class="sd">        otherwise (see ``_start_job_slurm``, which stages before calling</span>
+<span class="sd">        this).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">&quot;ssh&quot;</span><span class="p">:</span>
+            <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remote_exe_prefix</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">executable</span>
+            <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">path</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+                <span class="n">exe</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;run_from_jobserver&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">exe</span> <span class="o">=</span> <span class="n">shutil</span><span class="o">.</span><span class="n">which</span><span class="p">(</span><span class="s2">&quot;run_from_jobserver&quot;</span><span class="p">)</span>
+            <span class="n">prefix</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">exe</span><span class="p">)]</span>
+
+        <span class="n">cmd</span> <span class="o">=</span> <span class="n">prefix</span> <span class="o">+</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">job_id</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">wdir</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">db_path</span><span class="p">)]</span>
+
+        <span class="c1"># Check if in docker container. Only meaningful for local execution</span>
+        <span class="c1"># (local mode, or an on-cluster SLURM JobServer) -- this inspects</span>
+        <span class="c1"># *this* host, which is irrelevant for a transport=ssh section</span>
+        <span class="c1"># running on a different host entirely.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">transport</span> <span class="o">!=</span> <span class="s2">&quot;ssh&quot;</span><span class="p">:</span>
+            <span class="n">cgroup</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/proc/self/cgroup&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/.dockerenv&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span>
+                <span class="ow">or</span> <span class="n">cgroup</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span>
+                <span class="ow">and</span> <span class="s2">&quot;docker&quot;</span> <span class="ow">in</span> <span class="n">cgroup</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span>
+            <span class="p">):</span>
+                <span class="n">cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;--executor&quot;</span><span class="p">)</span>
+                <span class="n">cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;docker&quot;</span><span class="p">)</span>
 
         <span class="c1"># Environment variable for debug output</span>
         <span class="k">if</span> <span class="s2">&quot;SEAMM_LOG_LEVEL&quot;</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">:</span>
@@ -1538,6 +1729,33 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="n">cmd</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">cmdline</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">cmd</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_remote_exe_prefix</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The argv prefix that invokes ``run_from_jobserver`` on a</span>
+<span class="sd">        ``transport = ssh`` section&#39;s remote host.</span>
+
+<span class="sd">        ``_build_cmd``&#39;s ordinary ``sys.executable``-derived path is</span>
+<span class="sd">        meaningless there -- that&#39;s *this* host&#39;s conda env. Prefers an</span>
+<span class="sd">        explicit ``remote_run_from_jobserver`` absolute path (mirrors how</span>
+<span class="sd">        local mode already invokes it, no shell activation needed); falls</span>
+<span class="sd">        back to ``conda run -n &lt;remote_conda_env&gt;`` if only that&#39;s set.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">remote_run_from_jobserver</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">remote_run_from_jobserver</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">remote_conda_env</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span>
+                <span class="s2">&quot;conda&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;run&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;-n&quot;</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">remote_conda_env</span><span class="p">,</span>
+                <span class="s2">&quot;run_from_jobserver&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;SLURM section &#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; has transport=ssh but &quot;</span>
+            <span class="s2">&quot;neither remote_run_from_jobserver nor remote_conda_env is set &quot;</span>
+            <span class="s2">&quot;-- can&#39;t determine how to invoke run_from_jobserver on &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_start_job_local</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmd</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Run a job as a local subprocess (today&#39;s, pre-SLURM, behavior).&quot;&quot;&quot;</span>
@@ -1555,7 +1773,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">DEVNULL</span><span class="p">,</span>
             <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">DEVNULL</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;mode&quot;</span><span class="p">:</span> <span class="s2">&quot;local&quot;</span><span class="p">,</span> <span class="s2">&quot;pid&quot;</span><span class="p">:</span> <span class="n">process</span><span class="o">.</span><span class="n">pid</span><span class="p">,</span> <span class="s2">&quot;process&quot;</span><span class="p">:</span> <span class="n">process</span><span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;mode&quot;</span><span class="p">:</span> <span class="s2">&quot;local&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;pid&quot;</span><span class="p">:</span> <span class="n">process</span><span class="o">.</span><span class="n">pid</span><span class="p">,</span>
+            <span class="s2">&quot;process&quot;</span><span class="p">:</span> <span class="n">process</span><span class="p">,</span>
+            <span class="s2">&quot;wdir&quot;</span><span class="p">:</span> <span class="n">wdir</span><span class="p">,</span>
+        <span class="p">}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_times</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;   process = </span><span class="si">{</span><span class="n">process</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
@@ -1563,17 +1786,43 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         <span class="k">return</span> <span class="n">process</span><span class="o">.</span><span class="n">pid</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_remote_wdir</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wdir</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The remote scratch path a ``transport = ssh`` section&#39;s job</span>
+<span class="sd">        should run in, derived from its local working directory&#39;s name and</span>
+<span class="sd">        the section&#39;s ``remote_root``. Deterministic across resubmits --</span>
+<span class="sd">        job directory names (``Job_NNNNNN``) are unique across the whole</span>
+<span class="sd">        datastore, not just within a project, so no collision risk.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">remote_root</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;SLURM section &#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; has transport=ssh but &quot;</span>
+                <span class="s2">&quot;no remote_root is set -- can&#39;t determine where to stage &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;jobs on </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">PurePosixPath</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">remote_root</span><span class="p">)</span> <span class="o">/</span> <span class="n">Path</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_start_job_slurm</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">resubmit_count</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="o">=</span><span class="kc">None</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">resubmit_count</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="o">=</span><span class="kc">None</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Submit a job to SLURM as a whole-flowchart batch job.</span>
 
-<span class="sd">        No conda activation is needed in the script -- ``cmd[0]`` is</span>
-<span class="sd">        already the full, absolute path to ``run_from_jobserver`` inside</span>
-<span class="sd">        the active environment (see ``_build_cmd``), and SLURM inherits the</span>
-<span class="sd">        submitting shell&#39;s environment (PATH included) by default, so the</span>
-<span class="sd">        interpreter is found the same way it would be run directly.</span>
-<span class="sd">        Confirmed working end-to-end during Phase 0/1 groundwork.</span>
+<span class="sd">        For a ``transport = ssh`` section, ``wdir`` (this job&#39;s ordinary</span>
+<span class="sd">        local working directory) is first staged out to a remote scratch</span>
+<span class="sd">        directory via ``self._stager`` (``RsyncStager``) -- everything from</span>
+<span class="sd">        there on (the ``--chdir`` directive, the command line baked into</span>
+<span class="sd">        the sbatch payload) uses that *remote* path instead, since the</span>
+<span class="sd">        remote host has no access to ``wdir`` itself. For</span>
+<span class="sd">        ``transport = local`` (every case validated so far), staging is a</span>
+<span class="sd">        no-op and the effective/local paths are the same.</span>
+
+<span class="sd">        No conda activation is needed in the script for local-mode</span>
+<span class="sd">        directives -- ``cmd[0]`` is already the full, absolute path to</span>
+<span class="sd">        ``run_from_jobserver`` inside the active environment (see</span>
+<span class="sd">        ``_build_cmd``), and SLURM inherits the submitting shell&#39;s</span>
+<span class="sd">        environment (PATH included) by default, so the interpreter is</span>
+<span class="sd">        found the same way it would be run directly. Confirmed working</span>
+<span class="sd">        end-to-end during Phase 0/1 groundwork. ssh-transport instead uses</span>
+<span class="sd">        ``_remote_exe_prefix``, since the local interpreter path is</span>
+<span class="sd">        meaningless on the remote host.</span>
 
 <span class="sd">        ``slurm_overrides`` (a job&#39;s own ``parameters[&quot;slurm&quot;]``, e.g.</span>
 <span class="sd">        ``{&quot;ntasks&quot;: 4}``) is validated against the section&#39;s ``limits`` by</span>
@@ -1584,6 +1833,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="sd">        Never trusts that a caller (e.g. a web UI) already validated this.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">slurm_overrides</span> <span class="o">=</span> <span class="n">slurm_overrides</span> <span class="ow">or</span> <span class="p">{}</span>
+
+        <span class="n">remote_wdir</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">effective_wdir</span> <span class="o">=</span> <span class="n">wdir</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">&quot;ssh&quot;</span><span class="p">:</span>
+            <span class="n">remote_wdir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remote_wdir</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
+            <span class="n">effective_wdir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stager</span><span class="o">.</span><span class="n">stage_in</span><span class="p">(</span><span class="n">wdir</span><span class="p">,</span> <span class="n">remote_wdir</span><span class="p">)</span>
+
+        <span class="n">cmd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_cmd</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">effective_wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">)</span>
         <span class="n">quoted_cmd</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">shlex</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cmd</span><span class="p">)</span>
         <span class="n">payload</span> <span class="o">=</span> <span class="p">(</span>
             <span class="sa">f</span><span class="s2">&quot;export SEAMM_JOB_ID=</span><span class="si">{</span><span class="n">shlex</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">job_id</span><span class="p">))</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
@@ -1593,12 +1850,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         <span class="n">directives</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">merge_overrides</span><span class="p">(</span><span class="n">slurm_overrides</span><span class="p">)</span>
         <span class="n">directives</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;job_name&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;seamm-</span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="n">directives</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;chdir&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">wdir</span><span class="p">))</span>
+        <span class="n">directives</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;chdir&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">effective_wdir</span><span class="p">))</span>
         <span class="n">script</span> <span class="o">=</span> <span class="n">build_script</span><span class="p">(</span><span class="n">directives</span><span class="p">,</span> <span class="n">payload</span><span class="p">)</span>
 
-        <span class="c1"># Best-effort: keep a copy in the job&#39;s own directory for debugging,</span>
-        <span class="c1"># alongside job_data.json/references.db. Not required for</span>
-        <span class="c1"># submission itself -- that goes over sbatch&#39;s stdin.</span>
+        <span class="c1"># Best-effort: keep a copy in the job&#39;s own *local* directory for</span>
+        <span class="c1"># debugging, alongside job_data.json/references.db, regardless of</span>
+        <span class="c1"># transport. Not required for submission itself -- that goes over</span>
+        <span class="c1"># sbatch&#39;s stdin.</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;slurm_submit.sh&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">script</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -1626,7 +1884,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="s2">&quot;mode&quot;</span><span class="p">:</span> <span class="s2">&quot;slurm&quot;</span><span class="p">,</span>
             <span class="s2">&quot;slurm_job_id&quot;</span><span class="p">:</span> <span class="n">slurm_job_id</span><span class="p">,</span>
             <span class="s2">&quot;wdir&quot;</span><span class="p">:</span> <span class="n">wdir</span><span class="p">,</span>
-            <span class="s2">&quot;cmd&quot;</span><span class="p">:</span> <span class="n">cmd</span><span class="p">,</span>
+            <span class="s2">&quot;remote_wdir&quot;</span><span class="p">:</span> <span class="n">remote_wdir</span><span class="p">,</span>
+            <span class="s2">&quot;cmdline&quot;</span><span class="p">:</span> <span class="n">cmdline</span><span class="p">,</span>
             <span class="s2">&quot;resubmit_count&quot;</span><span class="p">:</span> <span class="n">resubmit_count</span><span class="p">,</span>
             <span class="s2">&quot;slurm_overrides&quot;</span><span class="p">:</span> <span class="n">slurm_overrides</span><span class="p">,</span>
         <span class="p">}</span>
@@ -1647,6 +1906,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="n">status</span><span class="p">[</span><span class="s2">&quot;successful jobs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">successful_jobs</span>
         <span class="n">status</span><span class="p">[</span><span class="s2">&quot;failed jobs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span>
         <span class="n">status</span><span class="p">[</span><span class="s2">&quot;ended jobs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ended_jobs</span>
+        <span class="n">status</span><span class="p">[</span><span class="s2">&quot;killed jobs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">killed_jobs</span>
 
         <span class="c1"># Cpu usage on machine</span>
         <span class="n">times</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">cpu_times</span><span class="p">()</span>

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.8.6 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.8.8 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=9f7a9088"></script>
+    <script src="_static/documentation_options.js?v=d318b753"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Credits" href="authors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.6" />
+  <meta name="docsearch:version" content="2026.8.8" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -506,6 +506,44 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.8.8 – Support SLURM dispatch to a cluster with no shared filesystem</dt><dd><ul class="simple">
+<li><p>A JobServer can now dispatch jobs via SLURM to a cluster it shares no
+filesystem with – for example, a laptop reaching a remote cluster
+over ssh. A job’s working directory is staged there before
+submission and its results staged back after, automatically.
+Configure it with new <code class="docutils literal notranslate"><span class="pre">remote_root</span></code> and
+<code class="docutils literal notranslate"><span class="pre">remote_run_from_jobserver</span></code> (or <code class="docutils literal notranslate"><span class="pre">remote_conda_env</span></code>) options in
+the relevant section of <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code>. See the
+User Guide for the full option list.</p></li>
+<li><p>Internal: the JobServer itself, not the running job, now writes a
+job’s final status to the datastore, for every job type (this was
+already true for the SLURM-losing-track case; now it’s the normal
+path for local jobs too). Fixes a real gap: a local job that
+crashed hard before it could write its own status previously stayed
+stuck as <code class="docutils literal notranslate"><span class="pre">running</span></code> forever, with no recovery – the JobServer now
+finalizes it from the process’s exit status instead.</p></li>
+<li><p>Live-validated end to end against a real cluster: a real job staged
+out via rsync, submitted via sbatch, confirmed completed via SLURM’s
+own accounting, and staged back correctly.</p></li>
+</ul>
+</dd>
+<dt>2026.8.7 – Actively stop deleted or explicitly-killed jobs</dt><dd><ul class="simple">
+<li><p>Deleting a job (e.g. via the dashboard) removes its row and files, but
+previously left whatever was actually running it untouched – it just
+ran on until it crashed on its own missing files. The JobServer now
+notices a tracked job’s row disappearing and actively stops it
+(<code class="docutils literal notranslate"><span class="pre">scancel</span></code> in SLURM mode, terminating the process in local mode),
+every poll cycle.</p></li>
+<li><p>A job can also be stopped without deleting it or its files, by setting
+its <code class="docutils literal notranslate"><span class="pre">status</span></code> to <code class="docutils literal notranslate"><span class="pre">kill</span></code> – an ordinary status update, no new API.
+The JobServer stops the run the same way, then sets <code class="docutils literal notranslate"><span class="pre">status</span></code> to
+<code class="docutils literal notranslate"><span class="pre">killed</span></code>. A job killed before it was ever started is finalized as
+<code class="docutils literal notranslate"><span class="pre">killed</span></code> directly.</p></li>
+<li><p>Both checks are also applied during startup reattachment, so a kill
+requested just before a JobServer restart is not lost or, worse,
+mistaken for a merely-lost job and resubmitted.</p></li>
+</ul>
+</dd>
 <dt>2026.8.6 – Add SLURM submission mode (Option 1: whole-flowchart sbatch)</dt><dd><ul class="simple">
 <li><p>A JobServer instance can now submit each job as a single SLURM batch job
 instead of a local subprocess, controlled by a new, opt-in

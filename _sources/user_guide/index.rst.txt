@@ -43,6 +43,8 @@ not yet implemented, see below):
     transport = local
     # only used when transport = ssh
     # host = molssi10
+    # See "No shared filesystem" below for remote_root/
+    # remote_run_from_jobserver/remote_conda_env, also ssh-only.
 
     # SLURM submission directives -- each becomes an `#SBATCH --flag=value`
     # line. Any key not listed here is still passed through, converting
@@ -74,12 +76,12 @@ What happens
 
 When a job comes up for submission, the JobServer builds a script wrapping
 the same ``run_from_jobserver`` command it would otherwise run directly --
-no ``conda activate`` or other shell setup is needed, since the command
-already uses the full path to the active Python environment's
-``run_from_jobserver``, and SLURM inherits the submitting environment by
-default. The script is submitted via ``sbatch``'s standard input (not
-written to a file the target host needs to see -- this also works if
-``transport = ssh`` and there's no shared filesystem with the cluster). A
+no ``conda activate`` or other shell setup is needed for ``transport =
+local``, since the command already uses the full path to the active Python
+environment's ``run_from_jobserver``, and SLURM inherits the submitting
+environment by default. (``transport = ssh`` is different -- see "No
+shared filesystem" below.) The script is submitted via ``sbatch``'s
+standard input, not written to a file the target host needs to see. A
 copy is also saved to the job's own working directory, as
 ``slurm_submit.sh``, for reference.
 
@@ -89,17 +91,18 @@ a local process ID. From then on, SLURM is the source of truth for whether
 the job is still pending, running, or finished -- the JobServer polls
 ``squeue``/``sacct`` rather than watching a local process.
 
-If a job's own flowchart run finishes normally (successfully or not), it
-writes its own final status to the datastore directly, exactly as in local
-mode -- the JobServer doesn't need to do anything further. The JobServer
-only steps in if a tracked job's SLURM state goes missing or terminal while
-its datastore row still says ``running`` -- meaning the run never got a
-chance to record its own outcome (a node failure, an out-of-memory kill, a
-cancellation, SLURM losing the record entirely, or the JobServer itself
-having been restarted). In that case it:
+Unlike the running flowchart itself, the JobServer -- not the job -- is
+what writes a job's final status to the datastore, in both SLURM and
+local-subprocess mode. (The job still writes its own ``job_data.json`` in
+its working directory, same as always; the JobServer just reads that back
+rather than trusting the job to reach the datastore directly, which isn't
+even possible for a job dispatched to a remote host with no shared
+filesystem.) Once SLURM reports a job's state as terminal (or has no
+record of it at all), the JobServer:
 
-1. Trusts the job's own ``job_data.json`` if the run got far enough to write
-   one, rather than resubmitting needlessly.
+1. Trusts the job's own ``job_data.json`` if the run got far enough to
+   write one, and writes that outcome (``finished``/``error``) to the
+   datastore.
 2. Otherwise resubmits, up to ``max_resubmits`` times -- safe because
    flowcharts checkpoint completed steps and resume from the first
    incomplete one, so a resubmitted run picks up where it left off rather
@@ -110,6 +113,57 @@ This same reconciliation runs both during normal polling and when the
 JobServer itself restarts (it re-checks every job still marked ``running``
 against SLURM on startup) -- restarting the JobServer does not lose track of
 or duplicate submissions for jobs that are still genuinely alive in SLURM.
+
+No shared filesystem
+---------------------
+
+If the JobServer doesn't share a filesystem with the SLURM cluster at all
+-- for example, it runs on a laptop reaching a remote cluster over ssh --
+``transport = ssh`` alone isn't enough: the remote host can't see the
+job's working directory, and there's no local Python environment path for
+it to invoke either. Two more options in the same ini section (both
+``ssh``-only) handle this:
+
+.. code-block:: ini
+
+    [molssi10]
+    transport = ssh
+    host = molssi10
+
+    # Base directory on the remote host under which each job gets its own
+    # scratch directory (named after the job's own directory, e.g.
+    # Job_000123) -- created automatically, no need to pre-create it.
+    remote_root = /home/psaxe/seamm_remote_jobs
+
+    # How to invoke run_from_jobserver on the remote host. Prefer an
+    # explicit absolute path (no shell/conda activation needed, same as
+    # local mode):
+    remote_run_from_jobserver = /home/psaxe/miniconda3/envs/seamm/bin/run_from_jobserver
+    # ...or, if that path isn't known/stable, fall back to a conda
+    # environment name (requires `conda` on PATH for the non-interactive
+    # ssh session sbatch runs under):
+    # remote_conda_env = seamm
+
+Before submission, the job's working directory is pushed to
+``<remote_root>/<job directory name>`` on the remote host (over
+``rsync -e ssh``); the ``#SBATCH --chdir`` directive and the command line
+built for the job both use that remote path, not the local one. Once
+SLURM reports the job terminal, the same directory is pulled back before
+the JobServer reads ``job_data.json`` -- so results (structures, logs,
+``references.db``, ...) end up in the job's ordinary local directory same
+as any other job. A transfer failure at either point is treated as
+transient and retried the next poll cycle, not recorded as the job
+having failed.
+
+Referenced input files need no special handling here -- a flowchart
+control parameter of type ``file`` is already staged into the job's own
+``data/`` directory (with its path on the command line rewritten to
+``job:data/...``) at submission time, before the JobServer ever sees the
+job, so the job's working directory is already self-contained by the time
+staging runs. The one thing this does *not* handle is a ``job://<n>/...``
+cross-job file reference (e.g. reading another job's checkpoint) -- that
+points outside the referencing job's own working directory and will fail
+to resolve on the remote host.
 
 Per-job resource overrides
 ---------------------------
@@ -166,6 +220,36 @@ Not yet supported
   one (all jobs currently use the ``[DEFAULT]`` section) -- ``parameters
   ["slurm"]`` is expected to gain a ``"section"`` key for this eventually.
 - Per-step SLURM submission (only whole-flowchart submission exists today).
+- A retry cap on stage-out transfer failures for a "no shared filesystem"
+  section, separate from ``max_resubmits`` -- today a permanently
+  unreachable remote host would retry indefinitely rather than eventually
+  giving up.
+
+Stopping a job
+================
+
+This applies in both local-subprocess and SLURM mode. The JobServer checks
+for two things every poll cycle, for every job it is actively tracking:
+
+1. **The job's datastore row was deleted.** Deleting a job (e.g. via the
+   dashboard) removes its row and files, but by itself does not touch
+   whatever is actually running it. The JobServer notices the row is gone
+   and actively stops the run -- ``scancel`` in SLURM mode, terminating the
+   process in local mode -- rather than leaving it to run on until it
+   crashes on its own missing files (or, on a cluster, sits consuming a
+   node for however long that takes).
+2. **The job's ``status`` was set to ``kill``.** This stops the run the same
+   way, but -- unlike deleting the job -- leaves its row and files alone.
+   Any client can request this with an ordinary status update (e.g. the
+   dashboard's existing job-update endpoint); no new API is needed. Once
+   the JobServer has stopped the job, it sets ``status`` to ``killed``. A
+   job that is asked to stop before the JobServer ever started it (still
+   ``submitted``) is simply finalized as ``killed`` directly.
+
+Both checks also run as part of startup reattachment, so a kill requested
+right before the JobServer restarts is not lost -- it stops the job (or
+finalizes it as ``killed``, if it had already ended) instead of resuming
+tracking or, worse, resubmitting it as if it had merely gone missing.
 
 Index
 =====

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>2026-08-05 – SLURM submission for JobServer &#8212; SEAMM Jobserver 2026.8.6 documentation</title>
+    <title>2026-08-05 – SLURM submission for JobServer &#8212; SEAMM Jobserver 2026.8.8 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../../_static/documentation_options.js?v=9f7a9088"></script>
+    <script src="../../../_static/documentation_options.js?v=d318b753"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Campaigns" href="../index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.6" />
+  <meta name="docsearch:version" content="2026.8.8" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -523,17 +523,28 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                   
   <section id="slurm-submission-for-jobserver">
 <h1>2026-08-05 – SLURM submission for JobServer<a class="headerlink" href="#slurm-submission-for-jobserver" title="Link to this heading">#</a></h1>
-<p>Status: Phases 0-4 and 6 done (SLURM version/JSON groundwork, the
+<p>Status: Phases 0-4, 6, 7, and 8 done (SLURM version/JSON groundwork, the
 <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code> backend library, JobServer’s SLURM mode, real end-to-end
 validation on MolSSI10 – including a live-discovered per-job resource
-override feature – and this documentation). Phase 5 (a future
-<code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code> <code class="docutils literal notranslate"><span class="pre">Slurm</span></code> executor for per-step submission) is not started
-and not currently scheduled. Originally tracked as a workspace-root living
-planning doc; moved here once the campaign was substantially complete.</p>
-<p>Pull requests from this campaign: <a class="reference external" href="https://github.com/molssi-seamm/seamm_jobserver/pull/17">seamm_jobserver #17</a> (the SLURM
-mode, per-job overrides, docs, and this campaign doc) and <a class="reference external" href="https://github.com/molssi-seamm/seamm_exec/pull/30">seamm_exec #30</a> (the
-<code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> header bugfix) are still open, awaiting human review.
-<code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code> has had two merged PRs and two releases: <a class="reference external" href="https://github.com/molssi-seamm/seamm_slurm/pull/1">#1</a> (docs) released as
+override feature, proactive job-stopping, and now real ssh-transport
+remote dispatch with no shared filesystem – and this documentation).
+Phase 5 (a future <code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code> <code class="docutils literal notranslate"><span class="pre">Slurm</span></code> executor for per-step submission)
+is not started and not currently scheduled. Phase 8 (remote/no-shared-
+filesystem JobServer dispatch – stage-in/stage-out, plus moving datastore
+status writes from the job itself to the JobServer for all job types) is
+implemented and validated live against molssi10 (2026-08-08); not yet
+committed/released, and not yet enabled for real use (see the Phase 8
+section for what’s left, which is operational – a real remote conda env
+– not code). <code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV/Mac.ini</span></code> (dev JobServer only) holds the
+validated-working config, deliberately left inert. Originally tracked as
+a workspace-root living planning doc;
+moved here once the campaign was substantially complete.</p>
+<p>All PRs from this campaign are now merged and released:
+<a class="reference external" href="https://github.com/molssi-seamm/seamm_jobserver/pull/17">seamm_jobserver #17</a>
+(the SLURM mode, per-job overrides, docs, and this campaign doc) released as
+<code class="docutils literal notranslate"><span class="pre">2026.8.6</span></code>; <a class="reference external" href="https://github.com/molssi-seamm/seamm_exec/pull/30">seamm_exec #30</a>
+(the <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> header bugfix) released as <code class="docutils literal notranslate"><span class="pre">2026.8.6</span></code>.
+<code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code> had two merged PRs and two releases: <a class="reference external" href="https://github.com/molssi-seamm/seamm_slurm/pull/1">#1</a> (docs) released as
 <code class="docutils literal notranslate"><span class="pre">2026.8.6</span></code>, and <a class="reference external" href="https://github.com/molssi-seamm/seamm_slurm/pull/3">#3</a>
 (the <code class="docutils literal notranslate"><span class="pre">config</span></code> module + <code class="docutils literal notranslate"><span class="pre">.limits</span></code>/<code class="docutils literal notranslate"><span class="pre">merge_overrides</span></code>) released as
 <code class="docutils literal notranslate"><span class="pre">2026.8.6.1</span></code>. <code class="docutils literal notranslate"><span class="pre">2026.8.6</span></code> itself never reached PyPI – its release event
@@ -543,7 +554,8 @@ rather than queued, so nothing retroactively triggered it once GitHub
 recovered. Not a functional problem since <code class="docutils literal notranslate"><span class="pre">2026.8.6.1</span></code> is a strict
 superset and did publish successfully (confirmed on PyPI) once cut after
 the outage cleared – just a gap in PyPI’s version history for that one
-tag.</p>
+tag. All three packages’ PyPI versions confirmed live: <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>
+<code class="docutils literal notranslate"><span class="pre">2026.8.6.1</span></code>, <code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code> <code class="docutils literal notranslate"><span class="pre">2026.8.6</span></code>, <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> <code class="docutils literal notranslate"><span class="pre">2026.8.6</span></code>.</p>
 <section id="why">
 <h2>Why<a class="headerlink" href="#why" title="Link to this heading">#</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">JobServer.start_job()</span></code> used to do <code class="docutils literal notranslate"><span class="pre">psutil.Popen(run_from_jobserver,</span>
@@ -974,6 +986,354 @@ plus new <code class="docutils literal notranslate"><span class="pre">seamm_jobs
 applied/rejected/out-of-range, preserved across resubmission and restart
 reattachment). All passing, lint and docs clean in both packages.</p>
 </section>
+<section id="phase-7-proactively-stopping-deleted-or-explicitly-killed-jobs-implemented-real-world-driven">
+<h3>Phase 7 – proactively stopping deleted or explicitly-killed jobs (implemented, real-world-driven)<a class="headerlink" href="#phase-7-proactively-stopping-deleted-or-explicitly-killed-jobs-implemented-real-world-driven" title="Link to this heading">#</a></h3>
+<p>Discovered directly from real usage, again: before this campaign, deleting a
+job (e.g. via the dashboard) removed its row and files but never told
+whatever was actually running it to stop – it just ran on until it crashed
+on its own missing files. Fine (if wasteful) for a local subprocess; on
+SLURM, an orphaned job can sit running, or queued, consuming a node/slot for
+however long it takes to fail on its own. Paul: “we will need to be more
+proactive and kill the slurm job.”</p>
+<p>The design:</p>
+<ul class="simple">
+<li><p>A new <code class="docutils literal notranslate"><span class="pre">check_for_stopped_jobs()</span></code> runs every poll cycle, before
+<code class="docutils literal notranslate"><span class="pre">check_for_finished_jobs()</span></code> – ordering matters, since a job that was
+just killed must already be gone from tracking before the finished-jobs
+reconciliation logic gets a chance to treat it as merely <em>lost</em> and try
+to resubmit it.</p></li>
+<li><p><strong>Deleted row</strong>: for every job the JobServer is actively tracking, a
+single batched query checks whether its row still exists at all. If not,
+the JobServer actively stops it (<code class="docutils literal notranslate"><span class="pre">scancel</span></code> in SLURM mode, <code class="docutils literal notranslate"><span class="pre">terminate</span></code>/
+<code class="docutils literal notranslate"><span class="pre">kill</span></code> in local mode) and drops it from tracking. Nothing to write to
+the datastore – the row is gone.</p></li>
+<li><p><strong>Explicit kill, files kept</strong>: extended the ask to also support stopping
+a job without deleting it – setting <code class="docutils literal notranslate"><span class="pre">status</span> <span class="pre">=</span> <span class="pre">'kill'</span></code> on the row (an
+ordinary status update; no new API needed on the dashboard/webui side,
+since a generic job-update endpoint already exists). The JobServer stops
+the run the same way, then finalizes <code class="docutils literal notranslate"><span class="pre">status</span></code> to <code class="docutils literal notranslate"><span class="pre">killed</span></code>. A job
+killed before the JobServer ever started it (still <code class="docutils literal notranslate"><span class="pre">submitted</span></code>) is
+simply finalized as <code class="docutils literal notranslate"><span class="pre">killed</span></code> directly, no process to touch.</p></li>
+<li><p><strong>Startup reattachment also has to know about this.</strong> Both
+<code class="docutils literal notranslate"><span class="pre">_reattach_local_jobs</span></code> and <code class="docutils literal notranslate"><span class="pre">_reattach_slurm_jobs</span></code> previously only
+looked at <code class="docutils literal notranslate"><span class="pre">status</span> <span class="pre">=</span> <span class="pre">'running'</span></code> rows. Extended both to
+<code class="docutils literal notranslate"><span class="pre">status</span> <span class="pre">IN</span> <span class="pre">('running',</span> <span class="pre">'kill')</span></code> – a job whose kill was requested right
+before a JobServer restart still needs its <em>real</em> process/SLURM job
+cancelled, not silently resumed, and (the sharper bug this would
+otherwise cause) not handed to the ordinary lost-job reconciliation path,
+which would try to resubmit it. If such a job is still alive, it’s pulled
+back into tracking (so the next ordinary poll cycle kills it via the path
+above); if it’s already gone, it’s finalized as <code class="docutils literal notranslate"><span class="pre">killed</span></code> directly.</p></li>
+<li><p>A new <code class="docutils literal notranslate"><span class="pre">killed_jobs</span></code> counter, alongside the existing
+<code class="docutils literal notranslate"><span class="pre">successful_jobs</span></code>/<code class="docutils literal notranslate"><span class="pre">failed_jobs</span></code>/<code class="docutils literal notranslate"><span class="pre">ended_jobs</span></code>, surfaced in
+<code class="docutils literal notranslate"><span class="pre">status()</span></code> and the Tk status tab.</p></li>
+</ul>
+<p>11 new tests (SLURM and local mode, both the deleted-row and kill-status
+paths, plus the three reattachment edge cases above) – 39 total, all
+green, lint and docs clean.</p>
+</section>
+<section id="phase-8-remote-no-shared-filesystem-jobserver-dispatch-designed-not-started">
+<h3>Phase 8 – remote (no-shared-filesystem) JobServer dispatch (designed, not started)<a class="headerlink" href="#phase-8-remote-no-shared-filesystem-jobserver-dispatch-designed-not-started" title="Link to this heading">#</a></h3>
+<p>Prompted by Paul wanting a JobServer running on his Mac to submit to
+MolSSI10’s SLURM cluster over SSH – distinct from every case validated so
+far, which is a JobServer that already runs <em>on</em> a host sharing storage
+with the cluster (MolSSI10’s own resident JobServer, reached locally; or
+the <code class="docutils literal notranslate"><span class="pre">SshSlurm</span></code> transport validated in Phase 1, used there only to drive
+<code class="docutils literal notranslate"><span class="pre">sbatch</span></code>/<code class="docutils literal notranslate"><span class="pre">squeue</span></code>/<code class="docutils literal notranslate"><span class="pre">sacct</span></code> remotely for testing, not to run a whole
+disconnected flowchart pipeline). A placeholder
+<code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV/Mac.ini</span></code> (<code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code>, <code class="docutils literal notranslate"><span class="pre">host</span> <span class="pre">=</span> <span class="pre">molssi10</span></code>, dev
+JobServer only – deliberately not added to the live <code class="docutils literal notranslate"><span class="pre">~/SEAMM/Mac.ini</span></code>,
+since a JobServer flips into SLURM mode the moment that file exists, with
+no disabled state) was added on 2026-08-08 as a marker for this phase; it
+does not work yet. Two real gaps, both grounded in the actual code rather
+than assumed:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">seamm_jobserver.jobserver._build_cmd()</span></code> derives the job’s executable
+from <code class="docutils literal notranslate"><span class="pre">sys.executable</span></code> – the <em>submitting</em> Mac’s own conda env path,
+meaningless on the remote host.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">JobServer._start_job_slurm()</span></code> sets <code class="docutils literal notranslate"><span class="pre">chdir</span></code> to the job’s local
+<code class="docutils literal notranslate"><span class="pre">wdir</span></code> (a Mac path) directly as an <code class="docutils literal notranslate"><span class="pre">#SBATCH</span> <span class="pre">--chdir</span></code> directive. With
+no shared filesystem between the Mac and any cluster host (confirmed
+Phase 0), that directory does not exist remotely, so <code class="docutils literal notranslate"><span class="pre">sbatch</span></code> would
+fail immediately.</p></li>
+</ol>
+<p>What’s <em>not</em> a gap, corrected from an initial over-worry: whether a job’s
+input files (referenced by absolute path outside <code class="docutils literal notranslate"><span class="pre">wdir</span></code>) need their own
+bespoke transfer logic. They don’t – SEAMM already solves this for the
+client-to-Dashboard hop, and the same convention generalizes cleanly to
+Dashboard/JobServer-to-remote-cluster. Concretely: a flowchart control
+parameter of <code class="docutils literal notranslate"><span class="pre">type:</span> <span class="pre">&quot;file&quot;</span></code> gets resolved at submission time
+(<code class="docutils literal notranslate"><span class="pre">seamm_dashboard_client.dashboard.Dashboard.submit()</span></code>,
+<code class="docutils literal notranslate"><span class="pre">seamm_dashboard/util.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">safe_filename()</span></code>) into a <code class="docutils literal notranslate"><span class="pre">job:data/...</span></code>
+reference on the command line, and the actual bytes are uploaded
+separately (<code class="docutils literal notranslate"><span class="pre">job.put_file()</span></code>) into that job’s own <code class="docutils literal notranslate"><span class="pre">data/</span></code> directory
+before the job ever starts. By the time <code class="docutils literal notranslate"><span class="pre">check_for_new_jobs()</span></code> picks a
+submitted job up, its working directory is already self-contained –
+<code class="docutils literal notranslate"><span class="pre">flowchart.flow</span></code>, the <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> stub, and <code class="docutils literal notranslate"><span class="pre">data/</span></code> holding every
+file the flowchart needs, with <code class="docutils literal notranslate"><span class="pre">job:data/...</span></code> references resolved
+locally by <code class="docutils literal notranslate"><span class="pre">seamm.Node.file_path()</span></code>’s <code class="docutils literal notranslate"><span class="pre">job:</span></code> URI scheme. So stage-in
+for a remote SLURM section is just “rsync the job’s own <code class="docutils literal notranslate"><span class="pre">wdir</span></code>,” not a
+general absolute-path resolver. <strong>Known
+out-of-scope corner case for v1</strong>: <code class="docutils literal notranslate"><span class="pre">job://&lt;n&gt;/...</span></code> cross-job references
+(another job’s checkpoint/output, e.g. ORCA’s <code class="docutils literal notranslate"><span class="pre">specified</span> <span class="pre">orbitals</span></code>
+restart) point outside the referencing job’s own <code class="docutils literal notranslate"><span class="pre">wdir</span></code> entirely and
+would need the <em>referenced</em> job staged too – not addressed by this
+design; such a reference in a job routed to a remote SLURM section should
+fail clearly rather than silently resolve to nothing.</p>
+<p>The design:</p>
+<ul class="simple">
+<li><p><strong>A stager, paired with the transport.</strong> Mirrors the existing
+<code class="docutils literal notranslate"><span class="pre">LocalSlurm</span></code>/<code class="docutils literal notranslate"><span class="pre">SshSlurm</span></code> pairing in <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code> (<code class="docutils literal notranslate"><span class="pre">local.py</span></code>/
+<code class="docutils literal notranslate"><span class="pre">ssh.py</span></code>): a <code class="docutils literal notranslate"><span class="pre">LocalStager</span></code> (no-op – today’s on-cluster-JobServer
+case, unchanged) and an <code class="docutils literal notranslate"><span class="pre">RsyncStager</span></code>, selected by the same
+<code class="docutils literal notranslate"><span class="pre">transport</span></code> ini key. <code class="docutils literal notranslate"><span class="pre">RsyncStager.stage_in(local_wdir,</span> <span class="pre">remote_wdir)</span></code>
+runs <code class="docutils literal notranslate"><span class="pre">ssh</span> <span class="pre">host</span> <span class="pre">mkdir</span> <span class="pre">-p</span> <span class="pre">&lt;remote_wdir&gt;</span></code> then
+<code class="docutils literal notranslate"><span class="pre">rsync</span> <span class="pre">-e</span> <span class="pre">ssh</span> <span class="pre">-a</span> <span class="pre">&lt;local_wdir&gt;/</span> <span class="pre">host:&lt;remote_wdir&gt;/</span></code> before submission;
+<code class="docutils literal notranslate"><span class="pre">stage_out(remote_wdir,</span> <span class="pre">local_wdir)</span></code> runs the same rsync in reverse
+once SLURM reports the job terminal, before anything reads
+<code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> back on the JobServer side. Lives in <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>
+(not <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>), matching why <code class="docutils literal notranslate"><span class="pre">config.py</span></code> moved there in
+Phase 6 – a lightweight consumer can use the transport without pulling
+in the rest of <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>.</p></li>
+<li><p><strong>New per-section ini keys</strong>: <code class="docutils literal notranslate"><span class="pre">remote_root</span></code> (base directory under
+which each job’s remote scratch tree is created, e.g. a path on
+MolSSI10’s own filesystem reachable from its <code class="docutils literal notranslate"><span class="pre">sbatch</span></code> host) and either
+<code class="docutils literal notranslate"><span class="pre">remote_conda_env</span></code> (payload becomes
+<code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">activate</span> <span class="pre">&lt;env&gt;</span> <span class="pre">&amp;&amp;</span> <span class="pre">run_from_jobserver</span> <span class="pre">...</span></code> for ssh-transport
+jobs specifically) or an explicit <code class="docutils literal notranslate"><span class="pre">remote_python</span></code>. Needed because
+<code class="docutils literal notranslate"><span class="pre">_build_cmd()</span></code>’s “no conda activation needed, invoke by full absolute
+path” shortcut (the Phase 2 correction to the original Phase 0 finding)
+is itself a Mac-local-path assumption that doesn’t survive a remote
+host with a different filesystem layout.</p></li>
+<li><p><strong>Stage-out failure is not job failure.</strong> A network blip during the
+post-completion <code class="docutils literal notranslate"><span class="pre">rsync</span></code> pull must not be recorded as the job having
+failed – it needs its own retry, analogous to but distinct from the
+existing resubmit-count logic in <code class="docutils literal notranslate"><span class="pre">_reconcile_stalled_job</span></code>, so a
+successful remote run isn’t discarded over a transient transfer error.</p></li>
+<li><p><strong>Remote scratch retention.</strong> Nothing today cleans up a remote job’s
+staged directory after a successful stage-out; needs an explicit
+policy (delete immediately, or keep N days for debugging) rather than
+letting it accumulate indefinitely on a shared login node.</p></li>
+</ul>
+<p><strong>Second, orthogonal change, generalized from this phase’s needs to all
+job types (Paul’s call):</strong> move ownership of the datastore’s terminal
+<code class="docutils literal notranslate"><span class="pre">jobs.status</span></code> write from the running job itself to the JobServer,
+uniformly – not only for the new remote-SLURM case, where the running
+process genuinely cannot reach the JobServer’s sqlite file, but for local
+and on-cluster-SLURM jobs too.</p>
+<p>Today this is inconsistent and, on inspection, already relies on a race
+that Phase 3 had to fix once (the <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> header-newline bug) and
+documents as “nothing to duplicate … in the common case” rather than as
+a designed guarantee:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">exec_flowchart.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">run()</span></code> (the <code class="docutils literal notranslate"><span class="pre">in_jobserver</span></code> branch, after
+unconditionally writing <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> in the same <code class="docutils literal notranslate"><span class="pre">finally</span></code> block)
+does a direct <code class="docutils literal notranslate"><span class="pre">sqlite3.connect(db_path)</span></code> <code class="docutils literal notranslate"><span class="pre">UPDATE</span> <span class="pre">jobs...</span></code> against
+the datastore – for <em>every</em> job type, local or SLURM, remote or
+on-cluster. Its failure is silently swallowed
+(<code class="docutils literal notranslate"><span class="pre">except</span> <span class="pre">Exception</span> <span class="pre">as</span> <span class="pre">e:</span> <span class="pre">printer.job(e)</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">JobServer._check_for_finished_jobs_local()</span></code> never touches the
+datastore row at all – it only updates in-memory counters and stops
+tracking, trusting the child process’s own write above entirely.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">JobServer._check_for_finished_jobs_slurm()</span></code>’s docstring says as much
+outright: “the job’s own <code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code> process still writes the
+datastore’s final status … nothing to duplicate here in the common
+case.” Only <code class="docutils literal notranslate"><span class="pre">_reconcile_stalled_job()</span></code> – the <em>un</em>-common case –
+actually has the JobServer write the status itself, via
+<code class="docutils literal notranslate"><span class="pre">_read_job_data_state()</span></code> (parses <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code>) +
+<code class="docutils literal notranslate"><span class="pre">_finalize_job_status()</span></code> (a conditional <code class="docutils literal notranslate"><span class="pre">UPDATE</span> <span class="pre">...</span> <span class="pre">WHERE</span> <span class="pre">status</span> <span class="pre">=</span>
+<span class="pre">'running'</span></code>, so it never clobbers a write that already landed).</p></li>
+</ul>
+<p>Paul’s point: a job process writing to a database it may not even be able
+to reach (true today for remote SLURM; also just generally odd for a
+worker process to own writes to its owner’s datastore) is backwards.
+Cleaner ownership: <strong>the JobServer always performs the terminal status
+write, for every job type</strong>, using exactly the <code class="docutils literal notranslate"><span class="pre">_read_job_data_state()</span></code> /
+<code class="docutils literal notranslate"><span class="pre">_finalize_job_status()</span></code> pair Phase 2/3 already built for the SLURM
+reconciliation-only case – generalized to be the <em>only</em> path, not a
+fallback:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_check_for_finished_jobs_local()</span></code> changes to read
+<code class="docutils literal notranslate"><span class="pre">job_data.json</span></code>’s <code class="docutils literal notranslate"><span class="pre">state</span></code> once the process exits (mirroring what
+<code class="docutils literal notranslate"><span class="pre">_reconcile_stalled_job</span></code> already does) and call
+<code class="docutils literal notranslate"><span class="pre">_finalize_job_status()</span></code>, instead of relying on the child’s own write.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_check_for_finished_jobs_slurm()</span></code>’s happy path changes the same way
+– always finalize from <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> once <code class="docutils literal notranslate"><span class="pre">poll_many()</span></code> reports a
+terminal SLURM state (after <code class="docutils literal notranslate"><span class="pre">stage_out</span></code> for the ssh-transport case
+above), rather than assuming the remote process already wrote it.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">exec_flowchart.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">in_jobserver</span></code> direct-sqlite-write branch can
+then be deleted outright – <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> is already written
+unconditionally first, so the JobServer never needs the job to touch
+the database at all. The other branch (<code class="docutils literal notranslate"><span class="pre">elif</span> <span class="pre">not</span> <span class="pre">standalone:</span></code>, used
+when a flowchart is run by hand against a Dashboard-connected datastore
+with <em>no</em> JobServer involved) is unaffected – that is the one case
+where the running process legitimately is the only thing that can
+record its own outcome.</p></li>
+<li><p>Net effect: local- and SLURM-mode finished-job detection converge on
+one shape (detect terminal condition -&gt; read <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> -&gt; one
+<code class="docutils literal notranslate"><span class="pre">_finalize_job_status</span></code> call), removing a dual-writer race for every
+job type rather than papering over it only for the new remote case.</p></li>
+</ul>
+<p>Suggested build order: (1) the local/SLURM DB-ownership change, since it’s
+a strict simplification independent of remote dispatch and de-risks the
+rest; (2) the stager abstraction + new ini keys; (3) wire
+<code class="docutils literal notranslate"><span class="pre">stage_in</span></code>/<code class="docutils literal notranslate"><span class="pre">stage_out</span></code> into <code class="docutils literal notranslate"><span class="pre">start_job</span></code>/<code class="docutils literal notranslate"><span class="pre">check_for_finished_jobs</span></code>
+for <code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code>; (4) unit tests against a fake stager, then one
+real end-to-end validation cycle against MolSSI10 in an isolated
+root/env/JobServer name, matching Phase 3’s discipline of not trusting
+mocks alone for this kind of cross-host, cross-format integration.</p>
+<p><strong>Sub-step (1) is done</strong> (2026-08-08): <code class="docutils literal notranslate"><span class="pre">_check_for_finished_jobs_local()</span></code>
+now reads <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> (falling back to the process exit code only if
+that file is missing) and calls <code class="docutils literal notranslate"><span class="pre">_finalize_job_status()</span></code> itself, the
+same as the SLURM path; <code class="docutils literal notranslate"><span class="pre">_start_job_local()</span></code> now records <code class="docutils literal notranslate"><span class="pre">wdir</span></code> in
+<code class="docutils literal notranslate"><span class="pre">self._jobs[job_id]</span></code> so that read is possible. <code class="docutils literal notranslate"><span class="pre">_reconcile_stalled_job</span></code>
+renamed to <code class="docutils literal notranslate"><span class="pre">_finalize_or_resubmit_slurm_job</span></code> and is now the primary
+finalize path for every terminal SLURM job (not just a lost-tracking
+fallback) – the premature success/failure counter bump keyed off SLURM’s
+own <code class="docutils literal notranslate"><span class="pre">completed</span></code> category (which only reflects the process’s exit code,
+not the flowchart’s own verdict) was removed in favor of counting once the
+real state is known, from <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code>. <code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code>’s
+<code class="docutils literal notranslate"><span class="pre">exec_flowchart.run()</span></code> no longer does the direct
+<code class="docutils literal notranslate"><span class="pre">sqlite3.connect(db_path)</span></code> write under <code class="docutils literal notranslate"><span class="pre">in_jobserver</span></code> at all –
+<code class="docutils literal notranslate"><span class="pre">db_path</span></code> stays an accepted parameter (and stays on the
+<code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code> command line, built by <code class="docutils literal notranslate"><span class="pre">_build_cmd()</span></code>) purely for
+CLI-contract compatibility between independently-released
+<code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>/<code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code> versions, but is otherwise unused now.
+5 new/rewritten tests in <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> (local-mode finalization had
+<em>zero</em> prior coverage – this was, on inspection, a real pre-existing gap:
+local jobs relied entirely on the child process’s own write, with nothing
+recovering a job stuck at <code class="docutils literal notranslate"><span class="pre">running</span></code> if that write never happened).
+44/44 and 9/9 tests green, <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">lint</span></code> clean in both packages. Installed
+into the <code class="docutils literal notranslate"><span class="pre">seamm-dev</span></code> conda env only (not the live <code class="docutils literal notranslate"><span class="pre">seamm</span></code> env, which
+has two real jobs running) – not yet committed, and the live JobServer
+processes on this Mac were not restarted, so this has no effect on
+anything running until that happens deliberately.</p>
+<p><strong>Sub-step (2) is done</strong> (2026-08-08): new <code class="docutils literal notranslate"><span class="pre">seamm_slurm.stage</span></code> module –
+<code class="docutils literal notranslate"><span class="pre">JobStager</span></code> ABC, <code class="docutils literal notranslate"><span class="pre">LocalStager</span></code> (no-op), <code class="docutils literal notranslate"><span class="pre">RsyncStager</span></code> (<code class="docutils literal notranslate"><span class="pre">ssh</span> <span class="pre">...</span>
+<span class="pre">mkdir</span> <span class="pre">-p</span></code> then <code class="docutils literal notranslate"><span class="pre">rsync</span> <span class="pre">-e</span> <span class="pre">ssh</span> <span class="pre">-a</span></code> for <code class="docutils literal notranslate"><span class="pre">stage_in</span></code>; the reverse rsync for
+<code class="docutils literal notranslate"><span class="pre">stage_out</span></code>), raising a new <code class="docutils literal notranslate"><span class="pre">StageError</span></code> on either failing. Exported
+from the package top level alongside <code class="docutils literal notranslate"><span class="pre">LocalSlurm</span></code>/<code class="docutils literal notranslate"><span class="pre">SshSlurm</span></code>.
+<code class="docutils literal notranslate"><span class="pre">SlurmSection</span></code> gained a <code class="docutils literal notranslate"><span class="pre">build_stager()</span></code> paired with <code class="docutils literal notranslate"><span class="pre">build_backend()</span></code>
+(same transport-keyed dispatch), plus two new optional ini keys parsed by
+<code class="docutils literal notranslate"><span class="pre">load_slurm_config()</span></code>: <code class="docutils literal notranslate"><span class="pre">remote_root</span></code> (base directory for a job’s
+remote scratch tree) and <code class="docutils literal notranslate"><span class="pre">remote_conda_env</span></code> (needed because
+<code class="docutils literal notranslate"><span class="pre">_build_cmd()</span></code>’s Mac-local executable path is meaningless on a remote
+host – not yet consumed by anything, that’s sub-step 3). 15 new tests
+(94 total in <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>), <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">lint</span></code> clean, installed editable
+into <code class="docutils literal notranslate"><span class="pre">seamm-dev</span></code>.</p>
+<p><strong>Sub-step (3) is done</strong> (2026-08-08): <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> now actually
+calls the stager. Also added a third ini key while wiring this up –
+<code class="docutils literal notranslate"><span class="pre">remote_run_from_jobserver</span></code> (an explicit absolute path, preferred over
+<code class="docutils literal notranslate"><span class="pre">remote_conda_env</span></code>’s <code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">run</span> <span class="pre">-n</span> <span class="pre">&lt;env&gt;</span></code> fallback, since it needs no
+shell/conda activation on the remote end, mirroring how local mode already
+invokes <code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code> by absolute path). Concretely:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">JobServer._stager</span></code> is built alongside <code class="docutils literal notranslate"><span class="pre">_slurm_backend</span></code> (from
+<code class="docutils literal notranslate"><span class="pre">self._slurm.build_stager()</span></code>) wherever the SLURM config loads.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">start_job()</span></code> no longer builds the job’s command line before
+dispatching to SLURM mode – <code class="docutils literal notranslate"><span class="pre">_start_job_slurm</span></code> now takes the raw
+<code class="docutils literal notranslate"><span class="pre">cmdline</span></code> and builds <code class="docutils literal notranslate"><span class="pre">cmd</span></code> itself, <em>after</em> staging, since a
+<code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> job’s <code class="docutils literal notranslate"><span class="pre">#SBATCH</span> <span class="pre">--chdir</span></code> and its command line’s
+working-directory argument must both be the <em>remote</em> path, not the
+local one. New <code class="docutils literal notranslate"><span class="pre">_remote_wdir(wdir)</span></code> derives that path deterministically
+from <code class="docutils literal notranslate"><span class="pre">remote_root</span></code> + the job directory’s name (<code class="docutils literal notranslate"><span class="pre">Job_NNNNNN</span></code> names are
+unique across the whole datastore, not just per-project, so no collision
+risk); new <code class="docutils literal notranslate"><span class="pre">_remote_exe_prefix()</span></code> picks
+<code class="docutils literal notranslate"><span class="pre">remote_run_from_jobserver</span></code>/<code class="docutils literal notranslate"><span class="pre">remote_conda_env</span></code> the way described
+above, raising clearly if a <code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> section configures
+neither. The local-mode path through <code class="docutils literal notranslate"><span class="pre">_build_cmd</span></code> is unchanged.</p></li>
+<li><p>Every place that used to store a job’s fully-built <code class="docutils literal notranslate"><span class="pre">cmd</span></code> for possible
+resubmission (<code class="docutils literal notranslate"><span class="pre">self._jobs[job_id][&quot;cmd&quot;]</span></code>) now stores the raw
+<code class="docutils literal notranslate"><span class="pre">cmdline</span></code> instead (<code class="docutils literal notranslate"><span class="pre">&quot;cmdline&quot;</span></code>), plus a new <code class="docutils literal notranslate"><span class="pre">&quot;remote_wdir&quot;</span></code> (<code class="docutils literal notranslate"><span class="pre">None</span></code>
+for <code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">local</span></code>) – covers fresh submission, resubmission, <em>and</em>
+startup reattachment (<code class="docutils literal notranslate"><span class="pre">_reattach_slurm_jobs</span></code> recomputes <code class="docutils literal notranslate"><span class="pre">remote_wdir</span></code>
+fresh from <code class="docutils literal notranslate"><span class="pre">wdir</span></code>, a pure function of config, rather than needing to
+have persisted it).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_finalize_or_resubmit_slurm_job</span></code> calls <code class="docutils literal notranslate"><span class="pre">self._stager.stage_out()</span></code>
+first, before ever reading <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> – for
+<code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">local</span></code> this is a no-op (<code class="docutils literal notranslate"><span class="pre">data[&quot;remote_wdir&quot;]</span></code> is
+<code class="docutils literal notranslate"><span class="pre">None</span></code>), so nothing changes for every case validated so far. A
+<code class="docutils literal notranslate"><span class="pre">StageError</span></code> here is treated as transient and <em>not</em> conflated with the
+resubmit-count logic (a different failure mode – SLURM losing track of
+the job entirely): the method returns <code class="docutils literal notranslate"><span class="pre">True</span></code> (stay tracked, retry next
+poll cycle) without touching the datastore row or resubmitting.</p></li>
+<li><p><strong>Known gap, not addressed</strong>: a permanently-broken stage-out (e.g. the
+remote host becomes unreachable for good) would retry indefinitely,
+since nothing currently caps stage-out retries the way
+<code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code> caps SLURM-losing-the-job retries. Low priority before
+this phase is even deployed once, but worth a retry cap of its own
+before real use.</p></li>
+</ul>
+<p>9 new tests in <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> (52 total) – staging call order and
+arguments, remote vs. local command-line content, both
+<code class="docutils literal notranslate"><span class="pre">remote_run_from_jobserver</span></code> and the <code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">run</span></code> fallback, the
+missing-both-config error, stage-out-failure-retries-then-succeeds across
+two poll cycles, and reattachment recomputing <code class="docutils literal notranslate"><span class="pre">remote_wdir</span></code>. All via
+<code class="docutils literal notranslate"><span class="pre">FakeStager</span></code> (new, alongside <code class="docutils literal notranslate"><span class="pre">FakeSlurmBackend</span></code>/<code class="docutils literal notranslate"><span class="pre">FakeProcess</span></code>) –
+never touches real ssh/rsync. <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">lint</span></code> clean in all three packages,
+installed into <code class="docutils literal notranslate"><span class="pre">seamm-dev</span></code>. Still not committed, and the live JobServer
+processes on this Mac were not restarted.</p>
+<p><strong>Sub-step (4) is done – Phase 8 fully validated live</strong> (2026-08-08):
+real, unmocked end-to-end run from this Mac to MolSSI10, no shared
+filesystem involved at any point. Isolated test setup, matching Phase 3’s
+discipline: a throwaway root (<code class="docutils literal notranslate"><span class="pre">~/seamm_phase8_test</span></code>, since removed) with
+its own minimal <code class="docutils literal notranslate"><span class="pre">jobs</span></code> table (the same shape the unit tests use –
+confirmed sufficient, since <code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code> on the remote side
+never touches this database at all post sub-step-1, only
+<code class="docutils literal notranslate"><span class="pre">job_data.json</span></code>), one hand-built job row/directory (a real two-node
+flowchart – <code class="docutils literal notranslate"><span class="pre">StartNode</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">FromSMILESStep</span></code>, built via <code class="docutils literal notranslate"><span class="pre">seamm</span></code>’s
+own API rather than hand-authoring flowchart JSON), and a
+<code class="docutils literal notranslate"><span class="pre">phase8-test.ini</span></code> pointing <code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> at <code class="docutils literal notranslate"><span class="pre">molssi10</span></code> with
+<code class="docutils literal notranslate"><span class="pre">remote_run_from_jobserver</span></code> set to the <code class="docutils literal notranslate"><span class="pre">seamm-slurm-test</span></code> conda env
+left over from Phase 3. Ran the real <code class="docutils literal notranslate"><span class="pre">seamm-jobserver</span></code> console script
+(not a Python test harness) against this setup.</p>
+<p>Confirmed, independently, at every stage:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">RsyncStager.stage_in</span></code> really pushed the job directory to
+<code class="docutils literal notranslate"><span class="pre">molssi10:/home/psaxe/seamm_phase8_test/remote/Job_000001</span></code> over real
+<code class="docutils literal notranslate"><span class="pre">ssh</span></code>/<code class="docutils literal notranslate"><span class="pre">rsync</span></code>.</p></li>
+<li><p>The generated <code class="docutils literal notranslate"><span class="pre">slurm_submit.sh</span></code> (local debug copy) had
+<code class="docutils literal notranslate"><span class="pre">--chdir=/home/psaxe/.../remote/Job_000001</span></code> (the <em>remote</em> path) and
+invoked <code class="docutils literal notranslate"><span class="pre">remote_run_from_jobserver</span></code> directly – the local Mac path
+never appeared in the script at all.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sacct</span></code> on molssi10 independently confirmed job 24 <code class="docutils literal notranslate"><span class="pre">COMPLETED</span></code>,
+exit code <code class="docutils literal notranslate"><span class="pre">0:0</span></code>.</p></li>
+<li><p>The flowchart genuinely ran remotely: <code class="docutils literal notranslate"><span class="pre">job.out</span></code> (pulled back via
+stage_out) shows “Created a molecular structure with 3 atoms” (water,
+from <code class="docutils literal notranslate"><span class="pre">SMILES=O</span></code>) and <code class="docutils literal notranslate"><span class="pre">~cpuinfo</span></code> in the pulled-back <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code>
+identifies molssi10’s real Xeon E5-1650, not the Mac’s Apple Silicon.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">RsyncStager.stage_out</span></code> pulled everything back –
+<code class="docutils literal notranslate"><span class="pre">final_structure.mmcif</span></code>, <code class="docutils literal notranslate"><span class="pre">references.db</span></code>, the per-job structure
+<code class="docutils literal notranslate"><span class="pre">seamm.db</span></code>, <code class="docutils literal notranslate"><span class="pre">slurm-24.out</span></code>, and <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> (<code class="docutils literal notranslate"><span class="pre">&quot;state&quot;:</span>
+<span class="pre">&quot;finished&quot;</span></code>) all landed in the <em>local</em> job directory.</p></li>
+<li><p>The JobServer (not the remote job) finalized the datastore: local
+<code class="docutils literal notranslate"><span class="pre">jobs.status</span></code> read back <code class="docutils literal notranslate"><span class="pre">finished</span></code> after the run, confirming
+sub-step (1)’s design – the remote <code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code> process
+never touched the local sqlite file at all, by design.</p></li>
+</ul>
+<p>One unrelated, pre-existing cosmetic artifact noted, not a Phase 8 bug: a
+stray “unable to open database file” line in <code class="docutils literal notranslate"><span class="pre">job.out</span></code>, right before
+the final timestamp print. Confirmed present in real pre-existing local
+production job logs too (<code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV/Jobs/.../thermal</span> <span class="pre">conductivity/</span>
+<span class="pre">Job_000808/job.out</span></code> and others, predating this campaign entirely) – some
+unrelated resource’s <code class="docutils literal notranslate"><span class="pre">__del__</span></code>/atexit cleanup, not on the success path
+(<code class="docutils literal notranslate"><span class="pre">job_data.json</span></code>’s <code class="docutils literal notranslate"><span class="pre">state</span></code> is already written and read back correctly
+before this point). Not investigated further as part of Phase 8.</p>
+<p>Both the local (<code class="docutils literal notranslate"><span class="pre">~/seamm_phase8_test</span></code>) and remote
+(<code class="docutils literal notranslate"><span class="pre">/home/psaxe/seamm_phase8_test</span></code>) test trees were removed after the
+run. <code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV/Mac.ini</span></code> (the placeholder from earlier sub-steps)
+updated to record that the mechanism is now validated-working, while
+staying deliberately inert for real dev use – <code class="docutils literal notranslate"><span class="pre">remote_run_from_jobserver</span></code>
+still points at the shared, stale <code class="docutils literal notranslate"><span class="pre">seamm-slurm-test</span></code> env from Phase 3,
+not a real/current/dedicated environment, so restarting the dev JobServer
+today would route real work through an environment not meant for it.
+That’s the one remaining step before this could become MolSSI10’s actual
+day-to-day dev-dispatch target.</p>
+<p><strong>Phase 8 implementation is now complete</strong> (sub-steps 1-4 all done); what
+remains before real use is operational, not code: a dedicated (non-test)
+remote conda env with a matching install, and a considered decision about
+which JobServer instance(s) should actually run with this enabled.</p>
+</section>
 </section>
 <section id="bugs-found-and-fixed-during-phase-3">
 <h2>Bugs found and fixed during Phase 3<a class="headerlink" href="#bugs-found-and-fixed-during-phase-3" title="Link to this heading">#</a></h2>
@@ -1093,6 +1453,97 @@ this campaign doc, per Paul’s request, since the campaign was
 substantially complete and the plan spans this package plus
 <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>/<code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code>. The original scratch file now just
 points here.</p></li>
+<li><p><strong>2026-08-06/07 (live deployment + Phase 6)</strong> – Deployed to the live
+MolSSI10 JobServer (patched conda env, restarted the systemd service).
+Paul submitted real jobs and found only one ran at a time; root-caused
+to SLURM defaulting to whole-node memory reservation (<code class="docutils literal notranslate"><span class="pre">mem</span></code> blank in
+<code class="docutils literal notranslate"><span class="pre">molssi10.ini</span></code>) rather than a core-count issue – fixed live with an
+explicit <code class="docutils literal notranslate"><span class="pre">mem</span> <span class="pre">=</span> <span class="pre">20G</span></code>, confirmed concurrent jobs after. This directly
+motivated Phase 6 (per-job resource overrides with site-defined limits),
+designed and implemented the same session, then validated live against
+MolSSI10 with a real accepted override (<code class="docutils literal notranslate"><span class="pre">ntasks=3</span></code>, confirmed via
+<code class="docutils literal notranslate"><span class="pre">sacct</span></code>) and a real rejected out-of-range override (no SLURM job
+created, correct error surfaced as <code class="docutils literal notranslate"><span class="pre">startup</span> <span class="pre">error</span></code>). Redeployed the
+final code plus a real <code class="docutils literal notranslate"><span class="pre">[molssi10.limits]</span></code> section
+(<code class="docutils literal notranslate"><span class="pre">overridable</span> <span class="pre">=</span> <span class="pre">ntasks,</span> <span class="pre">mem,</span> <span class="pre">time</span></code>) to MolSSI10. Test job dirs
+(<code class="docutils literal notranslate"><span class="pre">Job_000660</span></code>-<code class="docutils literal notranslate"><span class="pre">Job_000668</span></code>) cleaned up afterward, leaving the ~130
+pre-existing real jobs in the same project untouched.</p></li>
+<li><p><strong>2026-08-07 (releases)</strong> – All three packages’ PRs merged by <code class="docutils literal notranslate"><span class="pre">seamm</span></code>
+and released: <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code> <code class="docutils literal notranslate"><span class="pre">2026.8.6.1</span></code> (the <code class="docutils literal notranslate"><span class="pre">2026.8.6</span></code> tag was
+lost to a GitHub Actions outage and never reached PyPI, see the Status
+paragraph above), <code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code> <code class="docutils literal notranslate"><span class="pre">2026.8.6</span></code>, <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>
+<code class="docutils literal notranslate"><span class="pre">2026.8.6</span></code>. All confirmed live on PyPI; local checkouts synced via
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">update</span></code>.</p></li>
+<li><p><strong>2026-08-07 (Phase 7)</strong> – Paul: deleting a job in the dashboard leaves
+whatever is actually running it untouched, which SLURM makes worse than
+it was locally (an orphaned job can occupy a node/slot for a long time
+before crashing on its own). Designed and implemented proactive
+stopping: a deleted row or an explicit <code class="docutils literal notranslate"><span class="pre">status</span> <span class="pre">=</span> <span class="pre">'kill'</span></code> (new,
+files-preserving stop mechanism) is now noticed every poll cycle and
+actively cancelled/terminated, with startup reattachment also covering
+<code class="docutils literal notranslate"><span class="pre">kill</span></code>-status rows so a kill requested right before a restart isn’t
+lost or wrongly resubmitted. 11 new tests (39 total), lint/docs clean.</p></li>
+<li><p><strong>2026-08-08 (Phase 8, designed)</strong> – Paul wants a JobServer on his Mac
+able to submit to MolSSI10’s SLURM cluster over SSH – a case not
+actually covered by anything validated so far, since the Mac shares no
+filesystem with any cluster host. Added a non-functional placeholder
+<code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV/Mac.ini</span></code> (dev JobServer only) as a marker. Re-reading
+<code class="docutils literal notranslate"><span class="pre">_build_cmd()</span></code>/<code class="docutils literal notranslate"><span class="pre">_start_job_slurm()</span></code>/<code class="docutils literal notranslate"><span class="pre">exec_flowchart.run()</span></code>
+confirmed two real gaps (Mac-local executable path, Mac-local
+<code class="docutils literal notranslate"><span class="pre">--chdir</span></code>) plus a third already documented as a known limitation
+(<code class="docutils literal notranslate"><span class="pre">exec_flowchart.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">in_jobserver</span></code> datastore write is
+unreachable from a remote host). Paul corrected two parts of the initial
+design sketch: (1) referenced input files need no bespoke transfer
+logic – the existing flowchart <code class="docutils literal notranslate"><span class="pre">type:</span> <span class="pre">&quot;file&quot;</span></code> control-parameter
+mechanism already copies them into the job’s own <code class="docutils literal notranslate"><span class="pre">data/</span></code> before the
+JobServer ever sees the job, so remote stage-in is just “rsync the
+job’s <code class="docutils literal notranslate"><span class="pre">wdir</span></code>,” full stop; (2) rather than only fixing the datastore
+write for the new remote case, move ownership of the terminal status
+write from the running job to the JobServer for <em>all</em> job types (local
+included) – reusing <code class="docutils literal notranslate"><span class="pre">_read_job_data_state()</span></code>/<code class="docutils literal notranslate"><span class="pre">_finalize_job_status()</span></code>
+(built in Phase 2/3 for SLURM reconciliation only) as the sole path,
+and deleting <code class="docutils literal notranslate"><span class="pre">exec_flowchart.py</span></code>’s direct-sqlite-write branch
+entirely. Full design (stager abstraction paired with the SSH
+transport, new <code class="docutils literal notranslate"><span class="pre">remote_root</span></code>/<code class="docutils literal notranslate"><span class="pre">remote_conda_env</span></code> ini keys,
+stage-out-failure-is-not-job-failure, suggested build order) written up
+above. Not started.</p></li>
+<li><p><strong>2026-08-08 (Phase 8, implemented)</strong> – Built all four sub-steps in one
+session: (1) moved terminal datastore-status ownership from the job to
+the JobServer for local and SLURM modes alike, deleting
+<code class="docutils literal notranslate"><span class="pre">exec_flowchart.py</span></code>’s direct sqlite write; (2) <code class="docutils literal notranslate"><span class="pre">seamm_slurm.stage</span></code>
+(<code class="docutils literal notranslate"><span class="pre">LocalStager</span></code>/<code class="docutils literal notranslate"><span class="pre">RsyncStager</span></code>) plus <code class="docutils literal notranslate"><span class="pre">remote_root</span></code>/
+<code class="docutils literal notranslate"><span class="pre">remote_conda_env</span></code>/<code class="docutils literal notranslate"><span class="pre">remote_run_from_jobserver</span></code> ini keys; (3) wired
+staging into <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> (<code class="docutils literal notranslate"><span class="pre">_start_job_slurm</span></code> now stages then
+builds the command from the <em>effective</em> wdir; <code class="docutils literal notranslate"><span class="pre">_finalize_or_resubmit_</span>
+<span class="pre">slurm_job</span></code> stages results back before trusting <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code>,
+treating a stage-out failure as retry-worthy, not job failure); (4) a
+real, unmocked live run from this Mac to molssi10 – isolated test
+setup, real <code class="docutils literal notranslate"><span class="pre">ssh</span></code>/<code class="docutils literal notranslate"><span class="pre">rsync</span></code>, a real <code class="docutils literal notranslate"><span class="pre">sbatch</span></code> job (<code class="docutils literal notranslate"><span class="pre">sacct</span></code>
+confirmed <code class="docutils literal notranslate"><span class="pre">COMPLETED</span></code>), a real flowchart that actually ran on
+molssi10’s hardware (confirmed via its CPU info in the pulled-back
+<code class="docutils literal notranslate"><span class="pre">job_data.json</span></code>), and correct local finalization by the JobServer
+itself. 61 new/changed tests total across the three packages (all
+passing), <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">lint</span></code> clean in all three. Test trees removed after
+the run; <code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV/Mac.ini</span></code> updated to the validated config but
+left deliberately inert (points at a stale shared test env, not
+something to actually dispatch real dev work to yet).</p></li>
+<li><p><strong>2026-08-08 (Phase 7 + 8, committed/pushed/PRs open)</strong> – All three
+packages’ working-tree changes committed to their <code class="docutils literal notranslate"><span class="pre">dev</span></code> branches
+(Phase 7 and Phase 8 bundled into one <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> commit, per
+Paul’s call – simpler than splitting an already-interleaved diff) and
+pushed. Release prep (HISTORY entries, pre-flight checks, user-guide
+review/update per the release skill) done for all three; the
+<code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> user guide’s “SLURM submission” section corrected
+in the process – it previously claimed a job’s own process writes its
+final status directly (no longer true, see Phase 8 sub-step 1) and
+that <code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> already worked with no shared filesystem (it
+didn’t – only the script-over-stdin submission mechanism did; nothing
+staged files or built a remote-usable command line before this PR).
+PRs open for <code class="docutils literal notranslate"><span class="pre">seamm</span></code> review:
+<a class="reference external" href="https://github.com/molssi-seamm/seamm_jobserver/pull/18">seamm_jobserver #18</a>,
+<a class="reference external" href="https://github.com/molssi-seamm/seamm_slurm/pull/4">seamm_slurm #4</a>,
+<a class="reference external" href="https://github.com/molssi-seamm/seamm_exec/pull/31">seamm_exec #31</a>.
+Not merged or released – that’s <code class="docutils literal notranslate"><span class="pre">seamm</span></code>’s manual step.</p></li>
 </ul>
 </section>
 </section>
@@ -1158,6 +1609,8 @@ points here.</p></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-4-config-docs-rollout-done">Phase 4 – Config/docs rollout (done)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-5-a-future-seamm-exec-slurm-executor-not-started">Phase 5 – a future <code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code> <code class="docutils literal notranslate"><span class="pre">Slurm</span></code> executor (not started)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-6-per-job-slurm-resource-overrides-implemented-real-world-driven">Phase 6 – per-job SLURM resource overrides (implemented, real-world-driven)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-7-proactively-stopping-deleted-or-explicitly-killed-jobs-implemented-real-world-driven">Phase 7 – proactively stopping deleted or explicitly-killed jobs (implemented, real-world-driven)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-8-remote-no-shared-filesystem-jobserver-dispatch-designed-not-started">Phase 8 – remote (no-shared-filesystem) JobServer dispatch (designed, not started)</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bugs-found-and-fixed-during-phase-3">Bugs found and fixed during Phase 3</a></li>
