@@ -1,6 +1,26 @@
 =======
 History
 =======
+2026.8.8 -- Support SLURM dispatch to a cluster with no shared filesystem
+    * A JobServer can now dispatch jobs via SLURM to a cluster it shares no
+      filesystem with -- for example, a laptop reaching a remote cluster
+      over ssh. A job's working directory is staged there before
+      submission and its results staged back after, automatically.
+      Configure it with new ``remote_root`` and
+      ``remote_run_from_jobserver`` (or ``remote_conda_env``) options in
+      the relevant section of ``<root>/<jobserver-name>.ini``. See the
+      User Guide for the full option list.
+    * Internal: the JobServer itself, not the running job, now writes a
+      job's final status to the datastore, for every job type (this was
+      already true for the SLURM-losing-track case; now it's the normal
+      path for local jobs too). Fixes a real gap: a local job that
+      crashed hard before it could write its own status previously stayed
+      stuck as ``running`` forever, with no recovery -- the JobServer now
+      finalizes it from the process's exit status instead.
+    * Live-validated end to end against a real cluster: a real job staged
+      out via rsync, submitted via sbatch, confirmed completed via SLURM's
+      own accounting, and staged back correctly.
+
 2026.8.7 -- Actively stop deleted or explicitly-killed jobs
     * Deleting a job (e.g. via the dashboard) removes its row and files, but
       previously left whatever was actually running it untouched -- it just
