@@ -167,6 +167,32 @@ Not yet supported
   ["slurm"]`` is expected to gain a ``"section"`` key for this eventually.
 - Per-step SLURM submission (only whole-flowchart submission exists today).
 
+Stopping a job
+================
+
+This applies in both local-subprocess and SLURM mode. The JobServer checks
+for two things every poll cycle, for every job it is actively tracking:
+
+1. **The job's datastore row was deleted.** Deleting a job (e.g. via the
+   dashboard) removes its row and files, but by itself does not touch
+   whatever is actually running it. The JobServer notices the row is gone
+   and actively stops the run -- ``scancel`` in SLURM mode, terminating the
+   process in local mode -- rather than leaving it to run on until it
+   crashes on its own missing files (or, on a cluster, sits consuming a
+   node for however long that takes).
+2. **The job's ``status`` was set to ``kill``.** This stops the run the same
+   way, but -- unlike deleting the job -- leaves its row and files alone.
+   Any client can request this with an ordinary status update (e.g. the
+   dashboard's existing job-update endpoint); no new API is needed. Once
+   the JobServer has stopped the job, it sets ``status`` to ``killed``. A
+   job that is asked to stop before the JobServer ever started it (still
+   ``submitted``) is simply finalized as ``killed`` directly.
+
+Both checks also run as part of startup reattachment, so a kill requested
+right before the JobServer restarts is not lost -- it stops the job (or
+finalizes it as ``killed``, if it had already ended) instead of resuming
+tracking or, worse, resubmitting it as if it had merely gone missing.
+
 Index
 =====
 

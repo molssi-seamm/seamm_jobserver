@@ -1,6 +1,22 @@
 =======
 History
 =======
+2026.8.7 -- Actively stop deleted or explicitly-killed jobs
+    * Deleting a job (e.g. via the dashboard) removes its row and files, but
+      previously left whatever was actually running it untouched -- it just
+      ran on until it crashed on its own missing files. The JobServer now
+      notices a tracked job's row disappearing and actively stops it
+      (``scancel`` in SLURM mode, terminating the process in local mode),
+      every poll cycle.
+    * A job can also be stopped without deleting it or its files, by setting
+      its ``status`` to ``kill`` -- an ordinary status update, no new API.
+      The JobServer stops the run the same way, then sets ``status`` to
+      ``killed``. A job killed before it was ever started is finalized as
+      ``killed`` directly.
+    * Both checks are also applied during startup reattachment, so a kill
+      requested just before a JobServer restart is not lost or, worse,
+      mistaken for a merely-lost job and resubmitted.
+
 2026.8.6 -- Add SLURM submission mode (Option 1: whole-flowchart sbatch)
     * A JobServer instance can now submit each job as a single SLURM batch job
       instead of a local subprocess, controlled by a new, opt-in

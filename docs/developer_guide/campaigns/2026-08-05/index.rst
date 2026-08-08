@@ -1,20 +1,29 @@
 2026-08-05 -- SLURM submission for JobServer
 =============================================
 
-Status: Phases 0-4 and 6 done (SLURM version/JSON groundwork, the
+Status: Phases 0-4, 6, 7, and 8 done (SLURM version/JSON groundwork, the
 ``seamm_slurm`` backend library, JobServer's SLURM mode, real end-to-end
 validation on MolSSI10 -- including a live-discovered per-job resource
-override feature -- and this documentation). Phase 5 (a future
-``seamm_exec`` ``Slurm`` executor for per-step submission) is not started
-and not currently scheduled. Originally tracked as a workspace-root living
-planning doc; moved here once the campaign was substantially complete.
+override feature, proactive job-stopping, and now real ssh-transport
+remote dispatch with no shared filesystem -- and this documentation).
+Phase 5 (a future ``seamm_exec`` ``Slurm`` executor for per-step submission)
+is not started and not currently scheduled. Phase 8 (remote/no-shared-
+filesystem JobServer dispatch -- stage-in/stage-out, plus moving datastore
+status writes from the job itself to the JobServer for all job types) is
+implemented and validated live against molssi10 (2026-08-08); not yet
+committed/released, and not yet enabled for real use (see the Phase 8
+section for what's left, which is operational -- a real remote conda env
+-- not code). ``~/SEAMM_DEV/Mac.ini`` (dev JobServer only) holds the
+validated-working config, deliberately left inert. Originally tracked as
+a workspace-root living planning doc;
+moved here once the campaign was substantially complete.
 
-Pull requests from this campaign: `seamm_jobserver #17
-<https://github.com/molssi-seamm/seamm_jobserver/pull/17>`_ (the SLURM
-mode, per-job overrides, docs, and this campaign doc) and `seamm_exec #30
-<https://github.com/molssi-seamm/seamm_exec/pull/30>`_ (the
-``job_data.json`` header bugfix) are still open, awaiting human review.
-``seamm_slurm`` has had two merged PRs and two releases: `#1
+All PRs from this campaign are now merged and released:
+`seamm_jobserver #17 <https://github.com/molssi-seamm/seamm_jobserver/pull/17>`_
+(the SLURM mode, per-job overrides, docs, and this campaign doc) released as
+``2026.8.6``; `seamm_exec #30 <https://github.com/molssi-seamm/seamm_exec/pull/30>`_
+(the ``job_data.json`` header bugfix) released as ``2026.8.6``.
+``seamm_slurm`` had two merged PRs and two releases: `#1
 <https://github.com/molssi-seamm/seamm_slurm/pull/1>`_ (docs) released as
 ``2026.8.6``, and `#3 <https://github.com/molssi-seamm/seamm_slurm/pull/3>`_
 (the ``config`` module + ``.limits``/``merge_overrides``) released as
@@ -25,7 +34,8 @@ rather than queued, so nothing retroactively triggered it once GitHub
 recovered. Not a functional problem since ``2026.8.6.1`` is a strict
 superset and did publish successfully (confirmed on PyPI) once cut after
 the outage cleared -- just a gap in PyPI's version history for that one
-tag.
+tag. All three packages' PyPI versions confirmed live: ``seamm_slurm``
+``2026.8.6.1``, ``seamm_exec`` ``2026.8.6``, ``seamm_jobserver`` ``2026.8.6``.
 
 Why
 ---
@@ -474,6 +484,366 @@ plus new ``seamm_jobserver`` tests covering the full wiring (override
 applied/rejected/out-of-range, preserved across resubmission and restart
 reattachment). All passing, lint and docs clean in both packages.
 
+Phase 7 -- proactively stopping deleted or explicitly-killed jobs (implemented, real-world-driven)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Discovered directly from real usage, again: before this campaign, deleting a
+job (e.g. via the dashboard) removed its row and files but never told
+whatever was actually running it to stop -- it just ran on until it crashed
+on its own missing files. Fine (if wasteful) for a local subprocess; on
+SLURM, an orphaned job can sit running, or queued, consuming a node/slot for
+however long it takes to fail on its own. Paul: "we will need to be more
+proactive and kill the slurm job."
+
+The design:
+
+- A new ``check_for_stopped_jobs()`` runs every poll cycle, before
+  ``check_for_finished_jobs()`` -- ordering matters, since a job that was
+  just killed must already be gone from tracking before the finished-jobs
+  reconciliation logic gets a chance to treat it as merely *lost* and try
+  to resubmit it.
+- **Deleted row**: for every job the JobServer is actively tracking, a
+  single batched query checks whether its row still exists at all. If not,
+  the JobServer actively stops it (``scancel`` in SLURM mode, ``terminate``/
+  ``kill`` in local mode) and drops it from tracking. Nothing to write to
+  the datastore -- the row is gone.
+- **Explicit kill, files kept**: extended the ask to also support stopping
+  a job without deleting it -- setting ``status = 'kill'`` on the row (an
+  ordinary status update; no new API needed on the dashboard/webui side,
+  since a generic job-update endpoint already exists). The JobServer stops
+  the run the same way, then finalizes ``status`` to ``killed``. A job
+  killed before the JobServer ever started it (still ``submitted``) is
+  simply finalized as ``killed`` directly, no process to touch.
+- **Startup reattachment also has to know about this.** Both
+  ``_reattach_local_jobs`` and ``_reattach_slurm_jobs`` previously only
+  looked at ``status = 'running'`` rows. Extended both to
+  ``status IN ('running', 'kill')`` -- a job whose kill was requested right
+  before a JobServer restart still needs its *real* process/SLURM job
+  cancelled, not silently resumed, and (the sharper bug this would
+  otherwise cause) not handed to the ordinary lost-job reconciliation path,
+  which would try to resubmit it. If such a job is still alive, it's pulled
+  back into tracking (so the next ordinary poll cycle kills it via the path
+  above); if it's already gone, it's finalized as ``killed`` directly.
+- A new ``killed_jobs`` counter, alongside the existing
+  ``successful_jobs``/``failed_jobs``/``ended_jobs``, surfaced in
+  ``status()`` and the Tk status tab.
+
+11 new tests (SLURM and local mode, both the deleted-row and kill-status
+paths, plus the three reattachment edge cases above) -- 39 total, all
+green, lint and docs clean.
+
+Phase 8 -- remote (no-shared-filesystem) JobServer dispatch (designed, not started)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Prompted by Paul wanting a JobServer running on his Mac to submit to
+MolSSI10's SLURM cluster over SSH -- distinct from every case validated so
+far, which is a JobServer that already runs *on* a host sharing storage
+with the cluster (MolSSI10's own resident JobServer, reached locally; or
+the ``SshSlurm`` transport validated in Phase 1, used there only to drive
+``sbatch``/``squeue``/``sacct`` remotely for testing, not to run a whole
+disconnected flowchart pipeline). A placeholder
+``~/SEAMM_DEV/Mac.ini`` (``transport = ssh``, ``host = molssi10``, dev
+JobServer only -- deliberately not added to the live ``~/SEAMM/Mac.ini``,
+since a JobServer flips into SLURM mode the moment that file exists, with
+no disabled state) was added on 2026-08-08 as a marker for this phase; it
+does not work yet. Two real gaps, both grounded in the actual code rather
+than assumed:
+
+1. ``seamm_jobserver.jobserver._build_cmd()`` derives the job's executable
+   from ``sys.executable`` -- the *submitting* Mac's own conda env path,
+   meaningless on the remote host.
+2. ``JobServer._start_job_slurm()`` sets ``chdir`` to the job's local
+   ``wdir`` (a Mac path) directly as an ``#SBATCH --chdir`` directive. With
+   no shared filesystem between the Mac and any cluster host (confirmed
+   Phase 0), that directory does not exist remotely, so ``sbatch`` would
+   fail immediately.
+
+What's *not* a gap, corrected from an initial over-worry: whether a job's
+input files (referenced by absolute path outside ``wdir``) need their own
+bespoke transfer logic. They don't -- SEAMM already solves this for the
+client-to-Dashboard hop, and the same convention generalizes cleanly to
+Dashboard/JobServer-to-remote-cluster. Concretely: a flowchart control
+parameter of ``type: "file"`` gets resolved at submission time
+(``seamm_dashboard_client.dashboard.Dashboard.submit()``,
+``seamm_dashboard/util.py``'s ``safe_filename()``) into a ``job:data/...``
+reference on the command line, and the actual bytes are uploaded
+separately (``job.put_file()``) into that job's own ``data/`` directory
+before the job ever starts. By the time ``check_for_new_jobs()`` picks a
+submitted job up, its working directory is already self-contained --
+``flowchart.flow``, the ``job_data.json`` stub, and ``data/`` holding every
+file the flowchart needs, with ``job:data/...`` references resolved
+locally by ``seamm.Node.file_path()``'s ``job:`` URI scheme. So stage-in
+for a remote SLURM section is just "rsync the job's own ``wdir``," not a
+general absolute-path resolver. **Known
+out-of-scope corner case for v1**: ``job://<n>/...`` cross-job references
+(another job's checkpoint/output, e.g. ORCA's ``specified orbitals``
+restart) point outside the referencing job's own ``wdir`` entirely and
+would need the *referenced* job staged too -- not addressed by this
+design; such a reference in a job routed to a remote SLURM section should
+fail clearly rather than silently resolve to nothing.
+
+The design:
+
+- **A stager, paired with the transport.** Mirrors the existing
+  ``LocalSlurm``/``SshSlurm`` pairing in ``seamm_slurm`` (``local.py``/
+  ``ssh.py``): a ``LocalStager`` (no-op -- today's on-cluster-JobServer
+  case, unchanged) and an ``RsyncStager``, selected by the same
+  ``transport`` ini key. ``RsyncStager.stage_in(local_wdir, remote_wdir)``
+  runs ``ssh host mkdir -p <remote_wdir>`` then
+  ``rsync -e ssh -a <local_wdir>/ host:<remote_wdir>/`` before submission;
+  ``stage_out(remote_wdir, local_wdir)`` runs the same rsync in reverse
+  once SLURM reports the job terminal, before anything reads
+  ``job_data.json`` back on the JobServer side. Lives in ``seamm_slurm``
+  (not ``seamm_jobserver``), matching why ``config.py`` moved there in
+  Phase 6 -- a lightweight consumer can use the transport without pulling
+  in the rest of ``seamm_jobserver``.
+- **New per-section ini keys**: ``remote_root`` (base directory under
+  which each job's remote scratch tree is created, e.g. a path on
+  MolSSI10's own filesystem reachable from its ``sbatch`` host) and either
+  ``remote_conda_env`` (payload becomes
+  ``conda activate <env> && run_from_jobserver ...`` for ssh-transport
+  jobs specifically) or an explicit ``remote_python``. Needed because
+  ``_build_cmd()``'s "no conda activation needed, invoke by full absolute
+  path" shortcut (the Phase 2 correction to the original Phase 0 finding)
+  is itself a Mac-local-path assumption that doesn't survive a remote
+  host with a different filesystem layout.
+- **Stage-out failure is not job failure.** A network blip during the
+  post-completion ``rsync`` pull must not be recorded as the job having
+  failed -- it needs its own retry, analogous to but distinct from the
+  existing resubmit-count logic in ``_reconcile_stalled_job``, so a
+  successful remote run isn't discarded over a transient transfer error.
+- **Remote scratch retention.** Nothing today cleans up a remote job's
+  staged directory after a successful stage-out; needs an explicit
+  policy (delete immediately, or keep N days for debugging) rather than
+  letting it accumulate indefinitely on a shared login node.
+
+**Second, orthogonal change, generalized from this phase's needs to all
+job types (Paul's call):** move ownership of the datastore's terminal
+``jobs.status`` write from the running job itself to the JobServer,
+uniformly -- not only for the new remote-SLURM case, where the running
+process genuinely cannot reach the JobServer's sqlite file, but for local
+and on-cluster-SLURM jobs too.
+
+Today this is inconsistent and, on inspection, already relies on a race
+that Phase 3 had to fix once (the ``job_data.json`` header-newline bug) and
+documents as "nothing to duplicate ... in the common case" rather than as
+a designed guarantee:
+
+- ``exec_flowchart.py``'s ``run()`` (the ``in_jobserver`` branch, after
+  unconditionally writing ``job_data.json`` in the same ``finally`` block)
+  does a direct ``sqlite3.connect(db_path)`` ``UPDATE jobs...`` against
+  the datastore -- for *every* job type, local or SLURM, remote or
+  on-cluster. Its failure is silently swallowed
+  (``except Exception as e: printer.job(e)``).
+- ``JobServer._check_for_finished_jobs_local()`` never touches the
+  datastore row at all -- it only updates in-memory counters and stops
+  tracking, trusting the child process's own write above entirely.
+- ``JobServer._check_for_finished_jobs_slurm()``'s docstring says as much
+  outright: "the job's own ``run_from_jobserver`` process still writes the
+  datastore's final status ... nothing to duplicate here in the common
+  case." Only ``_reconcile_stalled_job()`` -- the *un*-common case --
+  actually has the JobServer write the status itself, via
+  ``_read_job_data_state()`` (parses ``job_data.json``) +
+  ``_finalize_job_status()`` (a conditional ``UPDATE ... WHERE status =
+  'running'``, so it never clobbers a write that already landed).
+
+Paul's point: a job process writing to a database it may not even be able
+to reach (true today for remote SLURM; also just generally odd for a
+worker process to own writes to its owner's datastore) is backwards.
+Cleaner ownership: **the JobServer always performs the terminal status
+write, for every job type**, using exactly the ``_read_job_data_state()`` /
+``_finalize_job_status()`` pair Phase 2/3 already built for the SLURM
+reconciliation-only case -- generalized to be the *only* path, not a
+fallback:
+
+- ``_check_for_finished_jobs_local()`` changes to read
+  ``job_data.json``'s ``state`` once the process exits (mirroring what
+  ``_reconcile_stalled_job`` already does) and call
+  ``_finalize_job_status()``, instead of relying on the child's own write.
+- ``_check_for_finished_jobs_slurm()``'s happy path changes the same way
+  -- always finalize from ``job_data.json`` once ``poll_many()`` reports a
+  terminal SLURM state (after ``stage_out`` for the ssh-transport case
+  above), rather than assuming the remote process already wrote it.
+- ``exec_flowchart.py``'s ``in_jobserver`` direct-sqlite-write branch can
+  then be deleted outright -- ``job_data.json`` is already written
+  unconditionally first, so the JobServer never needs the job to touch
+  the database at all. The other branch (``elif not standalone:``, used
+  when a flowchart is run by hand against a Dashboard-connected datastore
+  with *no* JobServer involved) is unaffected -- that is the one case
+  where the running process legitimately is the only thing that can
+  record its own outcome.
+- Net effect: local- and SLURM-mode finished-job detection converge on
+  one shape (detect terminal condition -> read ``job_data.json`` -> one
+  ``_finalize_job_status`` call), removing a dual-writer race for every
+  job type rather than papering over it only for the new remote case.
+
+Suggested build order: (1) the local/SLURM DB-ownership change, since it's
+a strict simplification independent of remote dispatch and de-risks the
+rest; (2) the stager abstraction + new ini keys; (3) wire
+``stage_in``/``stage_out`` into ``start_job``/``check_for_finished_jobs``
+for ``transport = ssh``; (4) unit tests against a fake stager, then one
+real end-to-end validation cycle against MolSSI10 in an isolated
+root/env/JobServer name, matching Phase 3's discipline of not trusting
+mocks alone for this kind of cross-host, cross-format integration.
+
+**Sub-step (1) is done** (2026-08-08): ``_check_for_finished_jobs_local()``
+now reads ``job_data.json`` (falling back to the process exit code only if
+that file is missing) and calls ``_finalize_job_status()`` itself, the
+same as the SLURM path; ``_start_job_local()`` now records ``wdir`` in
+``self._jobs[job_id]`` so that read is possible. ``_reconcile_stalled_job``
+renamed to ``_finalize_or_resubmit_slurm_job`` and is now the primary
+finalize path for every terminal SLURM job (not just a lost-tracking
+fallback) -- the premature success/failure counter bump keyed off SLURM's
+own ``completed`` category (which only reflects the process's exit code,
+not the flowchart's own verdict) was removed in favor of counting once the
+real state is known, from ``job_data.json``. ``seamm_exec``'s
+``exec_flowchart.run()`` no longer does the direct
+``sqlite3.connect(db_path)`` write under ``in_jobserver`` at all --
+``db_path`` stays an accepted parameter (and stays on the
+``run_from_jobserver`` command line, built by ``_build_cmd()``) purely for
+CLI-contract compatibility between independently-released
+``seamm_jobserver``/``seamm_exec`` versions, but is otherwise unused now.
+5 new/rewritten tests in ``seamm_jobserver`` (local-mode finalization had
+*zero* prior coverage -- this was, on inspection, a real pre-existing gap:
+local jobs relied entirely on the child process's own write, with nothing
+recovering a job stuck at ``running`` if that write never happened).
+44/44 and 9/9 tests green, ``make lint`` clean in both packages. Installed
+into the ``seamm-dev`` conda env only (not the live ``seamm`` env, which
+has two real jobs running) -- not yet committed, and the live JobServer
+processes on this Mac were not restarted, so this has no effect on
+anything running until that happens deliberately.
+
+**Sub-step (2) is done** (2026-08-08): new ``seamm_slurm.stage`` module --
+``JobStager`` ABC, ``LocalStager`` (no-op), ``RsyncStager`` (``ssh ...
+mkdir -p`` then ``rsync -e ssh -a`` for ``stage_in``; the reverse rsync for
+``stage_out``), raising a new ``StageError`` on either failing. Exported
+from the package top level alongside ``LocalSlurm``/``SshSlurm``.
+``SlurmSection`` gained a ``build_stager()`` paired with ``build_backend()``
+(same transport-keyed dispatch), plus two new optional ini keys parsed by
+``load_slurm_config()``: ``remote_root`` (base directory for a job's
+remote scratch tree) and ``remote_conda_env`` (needed because
+``_build_cmd()``'s Mac-local executable path is meaningless on a remote
+host -- not yet consumed by anything, that's sub-step 3). 15 new tests
+(94 total in ``seamm_slurm``), ``make lint`` clean, installed editable
+into ``seamm-dev``.
+
+**Sub-step (3) is done** (2026-08-08): ``seamm_jobserver`` now actually
+calls the stager. Also added a third ini key while wiring this up --
+``remote_run_from_jobserver`` (an explicit absolute path, preferred over
+``remote_conda_env``'s ``conda run -n <env>`` fallback, since it needs no
+shell/conda activation on the remote end, mirroring how local mode already
+invokes ``run_from_jobserver`` by absolute path). Concretely:
+
+- ``JobServer._stager`` is built alongside ``_slurm_backend`` (from
+  ``self._slurm.build_stager()``) wherever the SLURM config loads.
+- ``start_job()`` no longer builds the job's command line before
+  dispatching to SLURM mode -- ``_start_job_slurm`` now takes the raw
+  ``cmdline`` and builds ``cmd`` itself, *after* staging, since a
+  ``transport = ssh`` job's ``#SBATCH --chdir`` and its command line's
+  working-directory argument must both be the *remote* path, not the
+  local one. New ``_remote_wdir(wdir)`` derives that path deterministically
+  from ``remote_root`` + the job directory's name (``Job_NNNNNN`` names are
+  unique across the whole datastore, not just per-project, so no collision
+  risk); new ``_remote_exe_prefix()`` picks
+  ``remote_run_from_jobserver``/``remote_conda_env`` the way described
+  above, raising clearly if a ``transport = ssh`` section configures
+  neither. The local-mode path through ``_build_cmd`` is unchanged.
+- Every place that used to store a job's fully-built ``cmd`` for possible
+  resubmission (``self._jobs[job_id]["cmd"]``) now stores the raw
+  ``cmdline`` instead (``"cmdline"``), plus a new ``"remote_wdir"`` (``None``
+  for ``transport = local``) -- covers fresh submission, resubmission, *and*
+  startup reattachment (``_reattach_slurm_jobs`` recomputes ``remote_wdir``
+  fresh from ``wdir``, a pure function of config, rather than needing to
+  have persisted it).
+- ``_finalize_or_resubmit_slurm_job`` calls ``self._stager.stage_out()``
+  first, before ever reading ``job_data.json`` -- for
+  ``transport = local`` this is a no-op (``data["remote_wdir"]`` is
+  ``None``), so nothing changes for every case validated so far. A
+  ``StageError`` here is treated as transient and *not* conflated with the
+  resubmit-count logic (a different failure mode -- SLURM losing track of
+  the job entirely): the method returns ``True`` (stay tracked, retry next
+  poll cycle) without touching the datastore row or resubmitting.
+- **Known gap, not addressed**: a permanently-broken stage-out (e.g. the
+  remote host becomes unreachable for good) would retry indefinitely,
+  since nothing currently caps stage-out retries the way
+  ``max_resubmits`` caps SLURM-losing-the-job retries. Low priority before
+  this phase is even deployed once, but worth a retry cap of its own
+  before real use.
+
+9 new tests in ``seamm_jobserver`` (52 total) -- staging call order and
+arguments, remote vs. local command-line content, both
+``remote_run_from_jobserver`` and the ``conda run`` fallback, the
+missing-both-config error, stage-out-failure-retries-then-succeeds across
+two poll cycles, and reattachment recomputing ``remote_wdir``. All via
+``FakeStager`` (new, alongside ``FakeSlurmBackend``/``FakeProcess``) --
+never touches real ssh/rsync. ``make lint`` clean in all three packages,
+installed into ``seamm-dev``. Still not committed, and the live JobServer
+processes on this Mac were not restarted.
+
+**Sub-step (4) is done -- Phase 8 fully validated live** (2026-08-08):
+real, unmocked end-to-end run from this Mac to MolSSI10, no shared
+filesystem involved at any point. Isolated test setup, matching Phase 3's
+discipline: a throwaway root (``~/seamm_phase8_test``, since removed) with
+its own minimal ``jobs`` table (the same shape the unit tests use --
+confirmed sufficient, since ``run_from_jobserver`` on the remote side
+never touches this database at all post sub-step-1, only
+``job_data.json``), one hand-built job row/directory (a real two-node
+flowchart -- ``StartNode`` -> ``FromSMILESStep``, built via ``seamm``'s
+own API rather than hand-authoring flowchart JSON), and a
+``phase8-test.ini`` pointing ``transport = ssh`` at ``molssi10`` with
+``remote_run_from_jobserver`` set to the ``seamm-slurm-test`` conda env
+left over from Phase 3. Ran the real ``seamm-jobserver`` console script
+(not a Python test harness) against this setup.
+
+Confirmed, independently, at every stage:
+
+- ``RsyncStager.stage_in`` really pushed the job directory to
+  ``molssi10:/home/psaxe/seamm_phase8_test/remote/Job_000001`` over real
+  ``ssh``/``rsync``.
+- The generated ``slurm_submit.sh`` (local debug copy) had
+  ``--chdir=/home/psaxe/.../remote/Job_000001`` (the *remote* path) and
+  invoked ``remote_run_from_jobserver`` directly -- the local Mac path
+  never appeared in the script at all.
+- ``sacct`` on molssi10 independently confirmed job 24 ``COMPLETED``,
+  exit code ``0:0``.
+- The flowchart genuinely ran remotely: ``job.out`` (pulled back via
+  stage_out) shows "Created a molecular structure with 3 atoms" (water,
+  from ``SMILES=O``) and ``~cpuinfo`` in the pulled-back ``job_data.json``
+  identifies molssi10's real Xeon E5-1650, not the Mac's Apple Silicon.
+- ``RsyncStager.stage_out`` pulled everything back --
+  ``final_structure.mmcif``, ``references.db``, the per-job structure
+  ``seamm.db``, ``slurm-24.out``, and ``job_data.json`` (``"state":
+  "finished"``) all landed in the *local* job directory.
+- The JobServer (not the remote job) finalized the datastore: local
+  ``jobs.status`` read back ``finished`` after the run, confirming
+  sub-step (1)'s design -- the remote ``run_from_jobserver`` process
+  never touched the local sqlite file at all, by design.
+
+One unrelated, pre-existing cosmetic artifact noted, not a Phase 8 bug: a
+stray "unable to open database file" line in ``job.out``, right before
+the final timestamp print. Confirmed present in real pre-existing local
+production job logs too (``~/SEAMM_DEV/Jobs/.../thermal conductivity/
+Job_000808/job.out`` and others, predating this campaign entirely) -- some
+unrelated resource's ``__del__``/atexit cleanup, not on the success path
+(``job_data.json``'s ``state`` is already written and read back correctly
+before this point). Not investigated further as part of Phase 8.
+
+Both the local (``~/seamm_phase8_test``) and remote
+(``/home/psaxe/seamm_phase8_test``) test trees were removed after the
+run. ``~/SEAMM_DEV/Mac.ini`` (the placeholder from earlier sub-steps)
+updated to record that the mechanism is now validated-working, while
+staying deliberately inert for real dev use -- ``remote_run_from_jobserver``
+still points at the shared, stale ``seamm-slurm-test`` env from Phase 3,
+not a real/current/dedicated environment, so restarting the dev JobServer
+today would route real work through an environment not meant for it.
+That's the one remaining step before this could become MolSSI10's actual
+day-to-day dev-dispatch target.
+
+**Phase 8 implementation is now complete** (sub-steps 1-4 all done); what
+remains before real use is operational, not code: a dedicated (non-test)
+remote conda env with a matching install, and a considered decision about
+which JobServer instance(s) should actually run with this enabled.
+
 Bugs found and fixed during Phase 3
 --------------------------------------
 
@@ -592,3 +962,78 @@ Status log
   substantially complete and the plan spans this package plus
   ``seamm_slurm``/``seamm_exec``. The original scratch file now just
   points here.
+- **2026-08-06/07 (live deployment + Phase 6)** -- Deployed to the live
+  MolSSI10 JobServer (patched conda env, restarted the systemd service).
+  Paul submitted real jobs and found only one ran at a time; root-caused
+  to SLURM defaulting to whole-node memory reservation (``mem`` blank in
+  ``molssi10.ini``) rather than a core-count issue -- fixed live with an
+  explicit ``mem = 20G``, confirmed concurrent jobs after. This directly
+  motivated Phase 6 (per-job resource overrides with site-defined limits),
+  designed and implemented the same session, then validated live against
+  MolSSI10 with a real accepted override (``ntasks=3``, confirmed via
+  ``sacct``) and a real rejected out-of-range override (no SLURM job
+  created, correct error surfaced as ``startup error``). Redeployed the
+  final code plus a real ``[molssi10.limits]`` section
+  (``overridable = ntasks, mem, time``) to MolSSI10. Test job dirs
+  (``Job_000660``-``Job_000668``) cleaned up afterward, leaving the ~130
+  pre-existing real jobs in the same project untouched.
+- **2026-08-07 (releases)** -- All three packages' PRs merged by ``seamm``
+  and released: ``seamm_slurm`` ``2026.8.6.1`` (the ``2026.8.6`` tag was
+  lost to a GitHub Actions outage and never reached PyPI, see the Status
+  paragraph above), ``seamm_exec`` ``2026.8.6``, ``seamm_jobserver``
+  ``2026.8.6``. All confirmed live on PyPI; local checkouts synced via
+  ``make update``.
+- **2026-08-07 (Phase 7)** -- Paul: deleting a job in the dashboard leaves
+  whatever is actually running it untouched, which SLURM makes worse than
+  it was locally (an orphaned job can occupy a node/slot for a long time
+  before crashing on its own). Designed and implemented proactive
+  stopping: a deleted row or an explicit ``status = 'kill'`` (new,
+  files-preserving stop mechanism) is now noticed every poll cycle and
+  actively cancelled/terminated, with startup reattachment also covering
+  ``kill``-status rows so a kill requested right before a restart isn't
+  lost or wrongly resubmitted. 11 new tests (39 total), lint/docs clean.
+- **2026-08-08 (Phase 8, designed)** -- Paul wants a JobServer on his Mac
+  able to submit to MolSSI10's SLURM cluster over SSH -- a case not
+  actually covered by anything validated so far, since the Mac shares no
+  filesystem with any cluster host. Added a non-functional placeholder
+  ``~/SEAMM_DEV/Mac.ini`` (dev JobServer only) as a marker. Re-reading
+  ``_build_cmd()``/``_start_job_slurm()``/``exec_flowchart.run()``
+  confirmed two real gaps (Mac-local executable path, Mac-local
+  ``--chdir``) plus a third already documented as a known limitation
+  (``exec_flowchart.py``'s ``in_jobserver`` datastore write is
+  unreachable from a remote host). Paul corrected two parts of the initial
+  design sketch: (1) referenced input files need no bespoke transfer
+  logic -- the existing flowchart ``type: "file"`` control-parameter
+  mechanism already copies them into the job's own ``data/`` before the
+  JobServer ever sees the job, so remote stage-in is just "rsync the
+  job's ``wdir``," full stop; (2) rather than only fixing the datastore
+  write for the new remote case, move ownership of the terminal status
+  write from the running job to the JobServer for *all* job types (local
+  included) -- reusing ``_read_job_data_state()``/``_finalize_job_status()``
+  (built in Phase 2/3 for SLURM reconciliation only) as the sole path,
+  and deleting ``exec_flowchart.py``'s direct-sqlite-write branch
+  entirely. Full design (stager abstraction paired with the SSH
+  transport, new ``remote_root``/``remote_conda_env`` ini keys,
+  stage-out-failure-is-not-job-failure, suggested build order) written up
+  above. Not started.
+- **2026-08-08 (Phase 8, implemented)** -- Built all four sub-steps in one
+  session: (1) moved terminal datastore-status ownership from the job to
+  the JobServer for local and SLURM modes alike, deleting
+  ``exec_flowchart.py``'s direct sqlite write; (2) ``seamm_slurm.stage``
+  (``LocalStager``/``RsyncStager``) plus ``remote_root``/
+  ``remote_conda_env``/``remote_run_from_jobserver`` ini keys; (3) wired
+  staging into ``seamm_jobserver`` (``_start_job_slurm`` now stages then
+  builds the command from the *effective* wdir; ``_finalize_or_resubmit_
+  slurm_job`` stages results back before trusting ``job_data.json``,
+  treating a stage-out failure as retry-worthy, not job failure); (4) a
+  real, unmocked live run from this Mac to molssi10 -- isolated test
+  setup, real ``ssh``/``rsync``, a real ``sbatch`` job (``sacct``
+  confirmed ``COMPLETED``), a real flowchart that actually ran on
+  molssi10's hardware (confirmed via its CPU info in the pulled-back
+  ``job_data.json``), and correct local finalization by the JobServer
+  itself. 61 new/changed tests total across the three packages (all
+  passing), ``make lint`` clean in all three. Test trees removed after
+  the run; ``~/SEAMM_DEV/Mac.ini`` updated to the validated config but
+  left deliberately inert (points at a stale shared test env, not
+  something to actually dispatch real dev work to yet). Nothing
+  committed/pushed/released as part of this pass.
