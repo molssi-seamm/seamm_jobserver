@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import json
 import logging
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import psutil
 import shlex
 import shutil
@@ -22,6 +22,7 @@ import seamm_jobserver
 import seamm_util
 from seamm_slurm.config import load_slurm_config
 from seamm_slurm.script import build_script
+from seamm_slurm.stage import StageError
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
@@ -86,6 +87,7 @@ class JobServer(collections.abc.MutableMapping):
         self.successful_jobs = 0
         self.ended_jobs = 0
         self.failed_jobs = 0
+        self.killed_jobs = 0
 
         self._db = None
         self._db_path = None
@@ -93,6 +95,7 @@ class JobServer(collections.abc.MutableMapping):
         self._jobs = {}
         self._slurm = None
         self._slurm_backend = None
+        self._stager = None
         self._tk_root = None
         self._after_id = None
         self._status_id = None
@@ -142,6 +145,70 @@ class JobServer(collections.abc.MutableMapping):
     def db(self):
         return self._db
 
+    def check_for_stopped_jobs(self):
+        """Look for jobs that should be actively stopped: either their
+        datastore row vanished entirely (deleted, e.g. via the dashboard),
+        or their status was explicitly set to ``kill`` (stop the run but
+        leave the job's files/row alone, unlike delete).
+
+        Before SLURM, a deleted job's files disappeared but nothing told
+        the local subprocess to stop -- it just ran on until it crashed on
+        the missing files. On a scheduler that is not good enough: an
+        orphaned SLURM job can sit running (or queued) for hours. So every
+        poll cycle, before ``check_for_finished_jobs`` gets a chance to
+        treat a just-killed job as merely lost and try to resubmit it, this
+        checks every job actually being tracked and every ``kill``-status
+        row, and issues the real ``scancel``/process-kill.
+        """
+        if self._jobs:
+            job_ids = list(self._jobs.keys())
+            placeholders = ",".join("?" * len(job_ids))
+            cursor = self.db.cursor()
+            cursor.execute(f"SELECT id FROM jobs WHERE id IN ({placeholders})", job_ids)
+            present = {row[0] for row in cursor.fetchall()}
+            for job_id in job_ids:
+                if job_id not in present:
+                    self.logger.warning(
+                        f"Job {job_id}'s datastore row was deleted; stopping it."
+                    )
+                    self._stop_running_job(job_id)
+
+        cursor = self.db.cursor()
+        cursor.execute("SELECT id FROM jobs WHERE status = 'kill'")
+        for (job_id,) in cursor.fetchall():
+            if job_id in self._jobs:
+                self.logger.info(f"Job {job_id} was asked to stop; stopping it.")
+                self._stop_running_job(job_id)
+            self._finalize_job_status(job_id, "killed", expected_current="kill")
+
+    def _stop_running_job(self, job_id):
+        """Actively terminate a tracked job's local process, or cancel its
+        SLURM job, and stop tracking it here. Does not touch the datastore
+        row -- callers decide what, if anything, to write there."""
+        data = self._jobs.pop(job_id, None)
+        self._times.pop(job_id, None)
+        if data is None:
+            return
+
+        self.killed_jobs += 1
+        if data["mode"] == "local":
+            process = data["process"]
+            try:
+                process.terminate()
+                process.wait(timeout=5)
+            except psutil.TimeoutExpired:
+                process.kill()
+            except Exception as e:
+                self.logger.warning(f"Error stopping local job {job_id}: {e}")
+        else:
+            slurm_id = data["slurm_job_id"]
+            try:
+                self._slurm_backend.cancel(slurm_id)
+            except Exception as e:
+                self.logger.warning(
+                    f"Error cancelling SLURM job {job_id} ({slurm_id}): {e}"
+                )
+
     def check_for_finished_jobs(self):
         """Check whether jobs have finished."""
         if self._slurm is not None:
@@ -150,7 +217,11 @@ class JobServer(collections.abc.MutableMapping):
             self._check_for_finished_jobs_local()
 
     def _check_for_finished_jobs_local(self):
-        """Check whether locally-run (non-SLURM) jobs have finished."""
+        """Check whether locally-run (non-SLURM) jobs have finished, and
+        finalize their datastore status here -- the job's own process no
+        longer writes it directly (see Phase 8 in the campaign doc: the
+        JobServer, not the job, now owns every terminal status write, the
+        same as SLURM mode already required)."""
         finished = []
         for job_id, data in self._jobs.items():
             pid = data["pid"]
@@ -163,24 +234,50 @@ class JobServer(collections.abc.MutableMapping):
                 is_running = False
             if is_running:
                 self.logger.debug(f"Job {job_id} is running as process {pid}")
+                continue
+
+            finished.append(job_id)
+
+            # Trust job_data.json -- the flowchart's own conclusion --
+            # over the exit code when both are available; the exit code is
+            # only a fallback for a hard crash that never got to write it.
+            state = self._read_job_data_state(data["wdir"])
+            bucket = None
+            if state is not None:
+                self.logger.info(f"Job {job_id} finished ({pid=}) -> {state!r}.")
+                bucket = "successful" if state == "finished" else "failed"
             else:
-                finished.append(job_id)
                 try:
-                    status = process.returncode
+                    returncode = process.returncode
                 except Exception:
-                    status = "unknown"
-                self.logger.debug(f"Job {job_id} finished, code={status}.")
-                if status is None or status == 0:
+                    returncode = "unknown"
+                self.logger.debug(f"Job {job_id}: no job_data.json, code={returncode}.")
+                if returncode is None or returncode == 0:
+                    state = "finished"
+                    bucket = "successful"
                     self.logger.info(f"Job {job_id} finished successfully ({pid=}).")
-                    self.successful_jobs += 1
-                elif status == "unknown":
+                elif returncode == "unknown":
+                    # Can't confirm success -- write "error" so the row
+                    # doesn't stay stuck at "running" forever, but keep it
+                    # in its own counter bucket since it's not a confirmed
+                    # failure either.
+                    state = "error"
+                    bucket = "ended"
                     self.logger.info(
                         f"Job {job_id} finished with unknown status ({pid=})."
                     )
-                    self.ended_jobs += 1
                 else:
-                    self.logger.info(f"Job {job_id} failed ({pid=} {status=}).")
-                    self.failed_jobs += 1
+                    state = "error"
+                    bucket = "failed"
+                    self.logger.info(f"Job {job_id} failed ({pid=} {returncode=}).")
+
+            self._finalize_job_status(job_id, state)
+            if bucket == "successful":
+                self.successful_jobs += 1
+            elif bucket == "ended":
+                self.ended_jobs += 1
+            else:
+                self.failed_jobs += 1
         for job_id in finished:
             del self._jobs[job_id]
             del self._times[job_id]
@@ -189,11 +286,16 @@ class JobServer(collections.abc.MutableMapping):
         """Check whether SLURM-submitted jobs have finished.
 
         SLURM is the source of truth for *whether* a job has finished; the
-        job's own ``run_from_jobserver`` process still writes the datastore's
-        final status (``finished``/``error``) directly when it exits
-        normally, exactly as in local mode -- nothing to duplicate here in
-        the common case. Only reconciles (trusts ``job_data.json``, or
-        resubmits, or gives up) when that never happened.
+        JobServer is the sole writer of the datastore's terminal status for
+        every job (see Phase 8 in the campaign doc -- the job's own process
+        used to write this directly, which both duplicated this logic and
+        cannot work at all once a job may run on a host with no access to
+        the datastore's sqlite file). ``_finalize_or_resubmit_slurm_job``
+        does the actual finalize-or-resubmit work, trusting
+        ``job_data.json`` over SLURM's own completed/failed category when
+        both are available -- SLURM reporting a job "completed" only means
+        the process exited 0, not that the flowchart itself considered the
+        run successful.
         """
         if not self._jobs:
             return
@@ -201,9 +303,9 @@ class JobServer(collections.abc.MutableMapping):
         id_map = {data["slurm_job_id"]: job_id for job_id, data in self._jobs.items()}
         statuses = self._slurm_backend.poll_many(list(id_map.keys()))
 
-        # Snapshot: _reconcile_stalled_job may resubmit, which mutates
-        # self._jobs/_times for job_id in place (new slurm_job_id) -- don't
-        # iterate the live dict while that happens.
+        # Snapshot: _finalize_or_resubmit_slurm_job may resubmit, which
+        # mutates self._jobs/_times for job_id in place (new slurm_job_id)
+        # -- don't iterate the live dict while that happens.
         finished = []
         for job_id, data in list(self._jobs.items()):
             slurm_id = data["slurm_job_id"]
@@ -226,13 +328,8 @@ class JobServer(collections.abc.MutableMapping):
                     f"state {status.state} ({status.category})."
                 )
 
-            if status is not None and status.category == "completed":
-                self.successful_jobs += 1
-            else:
-                self.failed_jobs += 1
-
             if self._get_job_status(job_id) == "running":
-                resubmitted = self._reconcile_stalled_job(
+                resubmitted = self._finalize_or_resubmit_slurm_job(
                     job_id, data, data.get("resubmit_count", 0)
                 )
                 if resubmitted:
@@ -277,50 +374,71 @@ class JobServer(collections.abc.MutableMapping):
         except (OSError, ValueError, KeyError):
             return None
 
-    def _finalize_job_status(self, job_id, status):
-        """Force a job's datastore status, but only if it is still
-        ``running`` -- avoids clobbering a status the job's own process
-        already wrote (e.g. a race between polling and its own exit)."""
+    def _finalize_job_status(self, job_id, status, expected_current="running"):
+        """Force a job's datastore status, but only if it still has the
+        expected current status -- avoids clobbering a status something
+        else (the job's own process, another poll cycle) already wrote."""
         current_time = datetime.now(timezone.utc)
         cursor = self.db.cursor()
         cursor.execute(
-            "UPDATE jobs SET status = ?, finished = ?"
-            " WHERE id = ? AND status = 'running'",
-            (status, current_time, job_id),
+            "UPDATE jobs SET status = ?, finished = ?" " WHERE id = ? AND status = ?",
+            (status, current_time, job_id, expected_current),
         )
         self.db.commit()
 
-    def _reconcile_stalled_job(self, job_id, data, resubmit_count):
-        """Handle a job whose datastore row is still ``running`` even though
-        SLURM no longer shows it as pending/running (it reached a terminal
-        state, or SLURM has no record of it at all).
+    def _finalize_or_resubmit_slurm_job(self, job_id, data, resubmit_count):
+        """Finalize a SLURM job's datastore status now that SLURM reports it
+        terminal (or has no record of it at all), or resubmit it if there's
+        nothing yet to finalize from.
+
+        For a ``transport = ssh`` job (``data["remote_wdir"]`` set), the
+        remote working directory is pulled back to ``wdir`` first (via
+        ``self._stager``), so ``job_data.json`` and the flowchart's own
+        results land where the JobServer -- and the dashboard -- can see
+        them. A stage-out failure is a transient transfer problem, not a
+        job failure: it's worth a retry next poll cycle, not conflated
+        with the resubmit-count logic below (which is about SLURM losing
+        track of the job entirely, a different failure mode).
 
         First choice: trust ``job_data.json`` if the flowchart's own process
-        managed to write one -- avoids a needless resubmit when the run
-        actually finished (successfully or not) but its own direct sqlite
-        write raced or failed. Falls back to resubmitting, up to
-        ``max_resubmits``, since flowcharts checkpoint completed steps and
-        safely resume (see the design plan); beyond the cap, gives up and
-        marks the job ``error``.
+        managed to write one -- this is the common case (a normal finish),
+        not just a stalled-job fallback, since the JobServer is now the
+        only thing that writes the datastore's terminal status. Falls back
+        to resubmitting, up to ``max_resubmits``, since flowcharts
+        checkpoint completed steps and safely resume (see the design plan);
+        beyond the cap, gives up and marks the job ``error``.
 
         Returns
         -------
         bool
-            True if the job was resubmitted -- meaning ``self._jobs[job_id]``
-            and ``self._times[job_id]`` were just replaced with fresh
-            tracking data by ``_start_job_slurm`` and callers must not then
-            delete them. False if the job was finalized (finished/error) and
+            True if the job should stay tracked -- either resubmitted
+            (``self._jobs[job_id]``/``self._times[job_id]`` were just
+            replaced with fresh tracking data by ``_start_job_slurm``) or a
+            stage-out failure worth retrying next cycle (tracking data left
+            untouched). False if the job was finalized (finished/error) and
             is no longer tracked here.
         """
         wdir = data["wdir"]
+        remote_wdir = data.get("remote_wdir")
+
+        if remote_wdir is not None:
+            try:
+                self._stager.stage_out(remote_wdir, wdir)
+            except StageError as e:
+                self.logger.warning(
+                    f"Job {job_id}: stage_out from {remote_wdir} failed, "
+                    f"will retry next poll cycle: {e}"
+                )
+                return True
 
         state = self._read_job_data_state(wdir)
         if state is not None:
-            self.logger.info(
-                f"Job {job_id}: SLURM lost track of it, but job_data.json "
-                f"says '{state}' -- trusting that over resubmitting."
-            )
+            self.logger.info(f"Job {job_id}: finalizing as {state!r} (job_data.json).")
             self._finalize_job_status(job_id, state)
+            if state == "finished":
+                self.successful_jobs += 1
+            else:
+                self.failed_jobs += 1
             return False
 
         max_resubmits = self._slurm.max_resubmits
@@ -330,6 +448,7 @@ class JobServer(collections.abc.MutableMapping):
                 "(SLURM lost track of it and no job_data.json was written)."
             )
             self._finalize_job_status(job_id, "error")
+            self.failed_jobs += 1
             return False
 
         self.logger.warning(
@@ -339,7 +458,7 @@ class JobServer(collections.abc.MutableMapping):
         self._start_job_slurm(
             job_id,
             wdir,
-            data["cmd"],
+            data["cmdline"],
             resubmit_count=resubmit_count + 1,
             slurm_overrides=data.get("slurm_overrides"),
         )
@@ -532,6 +651,7 @@ class JobServer(collections.abc.MutableMapping):
         if self.stop:
             self._tk_root.quit()
         try:
+            self.check_for_stopped_jobs()
             self.check_for_finished_jobs()
             self.check_for_new_jobs()
         except Exception as e:
@@ -565,6 +685,7 @@ class JobServer(collections.abc.MutableMapping):
         text.insert("end", f"                started: {status['total jobs']:4d}\n")
         text.insert("end", f" completed successfully: {status['successful jobs']:4d}\n")
         text.insert("end", f"                 failed: {status['failed jobs']:4d}\n")
+        text.insert("end", f"                 killed: {status['killed jobs']:4d}\n")
         text.insert("end", f"         unknown status: {status['ended jobs']:4d}\n\n")
 
         # Cpu usage on machine
@@ -676,6 +797,7 @@ class JobServer(collections.abc.MutableMapping):
         self._slurm = load_slurm_config(root, self.options["name"])
         if self._slurm is not None:
             self._slurm_backend = self._slurm.build_backend()
+            self._stager = self._slurm.build_stager()
             logger.info(
                 f"Using SLURM (section '{self._slurm.name}', transport="
                 f"'{self._slurm.transport}') to run jobs, up to "
@@ -799,6 +921,7 @@ class JobServer(collections.abc.MutableMapping):
                     pass
 
                 try:
+                    self.check_for_stopped_jobs()
                     self.check_for_finished_jobs()
                     self.check_for_new_jobs()
 
@@ -816,13 +939,19 @@ class JobServer(collections.abc.MutableMapping):
         logger.info("Good bye!")
 
     def _reattach_local_jobs(self):
-        """On startup, find any locally-run jobs already in progress."""
+        """On startup, find any locally-run jobs already in progress.
+
+        Also picks up ``kill``-status rows, not just ``running`` ones: a
+        job whose kill was requested right before a restart still has a
+        real process that needs to actually be terminated, not just
+        forgotten about.
+        """
         for row in self.db.execute(
-            "SELECT id, json_extract(parameters, '$.pid')"
+            "SELECT id, status, json_extract(parameters, '$.pid')"
             "  FROM jobs"
-            " WHERE status = 'running'"
+            " WHERE status IN ('running', 'kill')"
         ):
-            job_id, pid = row
+            job_id, orig_status, pid = row
             if pid is None:
                 finished = True
             else:
@@ -843,16 +972,17 @@ class JobServer(collections.abc.MutableMapping):
                     else:
                         finished = True
             if finished:
-                self.logger.info(f"Job {job_id} already finished (pid={pid}).")
+                final_status = "killed" if orig_status == "kill" else "finished"
+                self.logger.info(f"Job {job_id} already {final_status} (pid={pid}).")
                 try:
                     current_time = datetime.now(timezone.utc)
                     cursor = self.db.cursor()
                     cursor.execute(
                         "UPDATE jobs"
-                        "   SET status = 'finished', finished = ?,"
+                        "   SET status = ?, finished = ?,"
                         "       parameters=json_remove(jobs.parameters, '$.pid')"
                         " WHERE id = ?",
-                        (current_time, job_id),
+                        (final_status, current_time, job_id),
                     )
                     self.db.commit()
                 except Exception as e:
@@ -860,6 +990,11 @@ class JobServer(collections.abc.MutableMapping):
             else:
                 self.previous_jobs += 1
                 self.logger.info(f"Job {job_id} is still running (pid={pid}).")
+                if orig_status == "kill":
+                    self.logger.info(
+                        f"Job {job_id} was marked for killing before restart; "
+                        "will stop it on the next poll cycle."
+                    )
 
     def _reattach_slurm_jobs(self):
         """On startup, find any SLURM-submitted jobs already in progress.
@@ -872,27 +1007,33 @@ class JobServer(collections.abc.MutableMapping):
         reconciliation path as the steady-state case (trust job_data.json,
         else resubmit up to a cap, else give up) -- safe because flowcharts
         checkpoint completed steps and safely resume.
+
+        Also picks up ``kill``-status rows, not just ``running`` ones -- a
+        job whose kill was requested right before a restart still needs its
+        real SLURM job cancelled, not silently resumed or, worse,
+        resubmitted by the ordinary reconciliation path.
         """
         rows = list(
             self.db.execute(
-                "SELECT id, path, json_extract(parameters, '$.slurm_job_id'),"
+                "SELECT id, status, path, json_extract(parameters, '$.slurm_job_id'),"
                 "       json_extract(parameters, '$.cmdline'),"
                 "       json_extract(parameters, '$.resubmit_count'),"
                 "       json_extract(parameters, '$.slurm')"
                 "  FROM jobs"
-                " WHERE status = 'running'"
+                " WHERE status IN ('running', 'kill')"
             )
         )
         if not rows:
             return
 
         ids = [
-            str(slurm_id) for _, _, slurm_id, _, _, _ in rows if slurm_id is not None
+            str(slurm_id) for _, _, _, slurm_id, _, _, _ in rows if slurm_id is not None
         ]
         statuses = self._slurm_backend.poll_many(ids) if ids else {}
 
         for (
             job_id,
+            orig_status,
             wdir,
             slurm_id,
             cmdline_json,
@@ -901,27 +1042,51 @@ class JobServer(collections.abc.MutableMapping):
         ) in rows:
             resubmit_count = resubmit_count or 0
             cmdline = json.loads(cmdline_json) if cmdline_json else []
-            cmd = self._build_cmd(job_id, wdir, cmdline)
             slurm_overrides = (
                 json.loads(slurm_overrides_json) if slurm_overrides_json else {}
+            )
+            # Recomputed, not stored: a pure function of wdir + this
+            # section's remote_root, so it's safe to derive fresh here for
+            # a job reattached after a restart, the same way a freshly
+            # submitted job gets it from _start_job_slurm.
+            remote_wdir = (
+                self._remote_wdir(wdir) if self._slurm.transport == "ssh" else None
             )
 
             status = statuses.get(str(slurm_id)) if slurm_id is not None else None
             if status is not None and not status.is_terminal:
-                self.logger.info(
-                    f"Job {job_id} (slurm_job_id={slurm_id}) is still "
-                    f"{status.category}."
-                )
                 self._jobs[job_id] = {
                     "mode": "slurm",
                     "slurm_job_id": str(slurm_id),
                     "wdir": wdir,
-                    "cmd": cmd,
+                    "remote_wdir": remote_wdir,
+                    "cmdline": cmdline,
                     "resubmit_count": resubmit_count,
                     "slurm_overrides": slurm_overrides,
                 }
                 self._times[job_id] = {}
                 self.previous_jobs += 1
+                if orig_status == "kill":
+                    self.logger.info(
+                        f"Job {job_id} (slurm_job_id={slurm_id}) was marked "
+                        "for killing before restart; will stop it on the "
+                        "next poll cycle."
+                    )
+                else:
+                    self.logger.info(
+                        f"Job {job_id} (slurm_job_id={slurm_id}) is still "
+                        f"{status.category}."
+                    )
+                continue
+
+            if orig_status == "kill":
+                self.logger.info(
+                    f"Job {job_id} (slurm_job_id={slurm_id}) was marked for "
+                    "killing before restart, and is already gone from "
+                    "SLURM; finalizing as killed."
+                )
+                self.killed_jobs += 1
+                self._finalize_job_status(job_id, "killed", expected_current="kill")
                 continue
 
             if slurm_id is None:
@@ -929,9 +1094,14 @@ class JobServer(collections.abc.MutableMapping):
                     f"Job {job_id} has no recorded slurm_job_id (JobServer "
                     "likely died mid-submission)."
                 )
-            self._reconcile_stalled_job(
+            self._finalize_or_resubmit_slurm_job(
                 job_id,
-                {"wdir": wdir, "cmd": cmd, "slurm_overrides": slurm_overrides},
+                {
+                    "wdir": wdir,
+                    "remote_wdir": remote_wdir,
+                    "cmdline": cmdline,
+                    "slurm_overrides": slurm_overrides,
+                },
                 resubmit_count,
             )
 
@@ -958,36 +1128,54 @@ class JobServer(collections.abc.MutableMapping):
         """
         self.logger.info("Starting job {}".format(job_id))
 
-        cmd = self._build_cmd(job_id, wdir, cmdline)
-        self.logger.debug(f"cmd for {job_id}: {cmd}")
-
         if self._slurm is not None:
+            # _start_job_slurm builds the command itself, after staging
+            # (transport=ssh) determines the *effective* working directory
+            # -- _build_cmd needs that, not the local wdir, to be correct.
             self._start_job_slurm(
-                job_id, wdir, cmd, slurm_overrides=slurm_overrides or {}
+                job_id, wdir, cmdline, slurm_overrides=slurm_overrides or {}
             )
             return None
+
+        cmd = self._build_cmd(job_id, wdir, cmdline)
+        self.logger.debug(f"cmd for {job_id}: {cmd}")
         return self._start_job_local(job_id, wdir, cmd)
 
     def _build_cmd(self, job_id, wdir, cmdline):
         """Build the ``run_from_jobserver`` command line for a job -- the
         same command whether it's about to be run as a local subprocess or
-        as the payload of a SLURM batch script."""
-        path = sys.executable
-        if path is not None and path != "":
-            exe = Path(path).parent / "run_from_jobserver"
-        else:
-            exe = shutil.which("run_from_jobserver")
-        cmd = [str(exe), str(job_id), str(wdir), str(self.db_path)]
+        as the payload of a SLURM batch script.
 
-        # Check if in docker container
-        cgroup = Path("/proc/self/cgroup")
-        if (
-            Path("/.dockerenv").is_file()
-            or cgroup.is_file()
-            and "docker" in cgroup.read_text()
-        ):
-            cmd.append("--executor")
-            cmd.append("docker")
+        ``wdir`` should already be the *effective* working directory the
+        job will actually run in -- the remote-staged path for a
+        ``transport = ssh`` SLURM section, or the ordinary local path
+        otherwise (see ``_start_job_slurm``, which stages before calling
+        this)."""
+        if self._slurm is not None and self._slurm.transport == "ssh":
+            prefix = self._remote_exe_prefix()
+        else:
+            path = sys.executable
+            if path is not None and path != "":
+                exe = Path(path).parent / "run_from_jobserver"
+            else:
+                exe = shutil.which("run_from_jobserver")
+            prefix = [str(exe)]
+
+        cmd = prefix + [str(job_id), str(wdir), str(self.db_path)]
+
+        # Check if in docker container. Only meaningful for local execution
+        # (local mode, or an on-cluster SLURM JobServer) -- this inspects
+        # *this* host, which is irrelevant for a transport=ssh section
+        # running on a different host entirely.
+        if self._slurm is None or self._slurm.transport != "ssh":
+            cgroup = Path("/proc/self/cgroup")
+            if (
+                Path("/.dockerenv").is_file()
+                or cgroup.is_file()
+                and "docker" in cgroup.read_text()
+            ):
+                cmd.append("--executor")
+                cmd.append("docker")
 
         # Environment variable for debug output
         if "SEAMM_LOG_LEVEL" in os.environ:
@@ -997,6 +1185,33 @@ class JobServer(collections.abc.MutableMapping):
         cmd.extend(cmdline)
 
         return cmd
+
+    def _remote_exe_prefix(self):
+        """The argv prefix that invokes ``run_from_jobserver`` on a
+        ``transport = ssh`` section's remote host.
+
+        ``_build_cmd``'s ordinary ``sys.executable``-derived path is
+        meaningless there -- that's *this* host's conda env. Prefers an
+        explicit ``remote_run_from_jobserver`` absolute path (mirrors how
+        local mode already invokes it, no shell activation needed); falls
+        back to ``conda run -n <remote_conda_env>`` if only that's set.
+        """
+        if self._slurm.remote_run_from_jobserver:
+            return [self._slurm.remote_run_from_jobserver]
+        if self._slurm.remote_conda_env:
+            return [
+                "conda",
+                "run",
+                "-n",
+                self._slurm.remote_conda_env,
+                "run_from_jobserver",
+            ]
+        raise RuntimeError(
+            f"SLURM section '{self._slurm.name}' has transport=ssh but "
+            "neither remote_run_from_jobserver nor remote_conda_env is set "
+            "-- can't determine how to invoke run_from_jobserver on "
+            f"{self._slurm.host}."
+        )
 
     def _start_job_local(self, job_id, wdir, cmd):
         """Run a job as a local subprocess (today's, pre-SLURM, behavior)."""
@@ -1014,7 +1229,12 @@ class JobServer(collections.abc.MutableMapping):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        self._jobs[job_id] = {"mode": "local", "pid": process.pid, "process": process}
+        self._jobs[job_id] = {
+            "mode": "local",
+            "pid": process.pid,
+            "process": process,
+            "wdir": wdir,
+        }
         self._times[job_id] = {}
         self.logger.debug(f"   process = {process}")
 
@@ -1022,17 +1242,43 @@ class JobServer(collections.abc.MutableMapping):
 
         return process.pid
 
+    def _remote_wdir(self, wdir):
+        """The remote scratch path a ``transport = ssh`` section's job
+        should run in, derived from its local working directory's name and
+        the section's ``remote_root``. Deterministic across resubmits --
+        job directory names (``Job_NNNNNN``) are unique across the whole
+        datastore, not just within a project, so no collision risk."""
+        if not self._slurm.remote_root:
+            raise RuntimeError(
+                f"SLURM section '{self._slurm.name}' has transport=ssh but "
+                "no remote_root is set -- can't determine where to stage "
+                f"jobs on {self._slurm.host}."
+            )
+        return str(PurePosixPath(self._slurm.remote_root) / Path(wdir).name)
+
     def _start_job_slurm(
-        self, job_id, wdir, cmd, resubmit_count=0, slurm_overrides=None
+        self, job_id, wdir, cmdline, resubmit_count=0, slurm_overrides=None
     ):
         """Submit a job to SLURM as a whole-flowchart batch job.
 
-        No conda activation is needed in the script -- ``cmd[0]`` is
-        already the full, absolute path to ``run_from_jobserver`` inside
-        the active environment (see ``_build_cmd``), and SLURM inherits the
-        submitting shell's environment (PATH included) by default, so the
-        interpreter is found the same way it would be run directly.
-        Confirmed working end-to-end during Phase 0/1 groundwork.
+        For a ``transport = ssh`` section, ``wdir`` (this job's ordinary
+        local working directory) is first staged out to a remote scratch
+        directory via ``self._stager`` (``RsyncStager``) -- everything from
+        there on (the ``--chdir`` directive, the command line baked into
+        the sbatch payload) uses that *remote* path instead, since the
+        remote host has no access to ``wdir`` itself. For
+        ``transport = local`` (every case validated so far), staging is a
+        no-op and the effective/local paths are the same.
+
+        No conda activation is needed in the script for local-mode
+        directives -- ``cmd[0]`` is already the full, absolute path to
+        ``run_from_jobserver`` inside the active environment (see
+        ``_build_cmd``), and SLURM inherits the submitting shell's
+        environment (PATH included) by default, so the interpreter is
+        found the same way it would be run directly. Confirmed working
+        end-to-end during Phase 0/1 groundwork. ssh-transport instead uses
+        ``_remote_exe_prefix``, since the local interpreter path is
+        meaningless on the remote host.
 
         ``slurm_overrides`` (a job's own ``parameters["slurm"]``, e.g.
         ``{"ntasks": 4}``) is validated against the section's ``limits`` by
@@ -1043,6 +1289,14 @@ class JobServer(collections.abc.MutableMapping):
         Never trusts that a caller (e.g. a web UI) already validated this.
         """
         slurm_overrides = slurm_overrides or {}
+
+        remote_wdir = None
+        effective_wdir = wdir
+        if self._slurm.transport == "ssh":
+            remote_wdir = self._remote_wdir(wdir)
+            effective_wdir = self._stager.stage_in(wdir, remote_wdir)
+
+        cmd = self._build_cmd(job_id, effective_wdir, cmdline)
         quoted_cmd = " ".join(shlex.quote(c) for c in cmd)
         payload = (
             f"export SEAMM_JOB_ID={shlex.quote(str(job_id))}\n"
@@ -1052,12 +1306,13 @@ class JobServer(collections.abc.MutableMapping):
 
         directives = self._slurm.merge_overrides(slurm_overrides)
         directives.setdefault("job_name", f"seamm-{job_id}")
-        directives.setdefault("chdir", str(wdir))
+        directives.setdefault("chdir", str(effective_wdir))
         script = build_script(directives, payload)
 
-        # Best-effort: keep a copy in the job's own directory for debugging,
-        # alongside job_data.json/references.db. Not required for
-        # submission itself -- that goes over sbatch's stdin.
+        # Best-effort: keep a copy in the job's own *local* directory for
+        # debugging, alongside job_data.json/references.db, regardless of
+        # transport. Not required for submission itself -- that goes over
+        # sbatch's stdin.
         try:
             (Path(wdir) / "slurm_submit.sh").write_text(script)
         except OSError as e:
@@ -1085,7 +1340,8 @@ class JobServer(collections.abc.MutableMapping):
             "mode": "slurm",
             "slurm_job_id": slurm_job_id,
             "wdir": wdir,
-            "cmd": cmd,
+            "remote_wdir": remote_wdir,
+            "cmdline": cmdline,
             "resubmit_count": resubmit_count,
             "slurm_overrides": slurm_overrides,
         }
@@ -1104,6 +1360,7 @@ class JobServer(collections.abc.MutableMapping):
         status["successful jobs"] = self.successful_jobs
         status["failed jobs"] = self.failed_jobs
         status["ended jobs"] = self.ended_jobs
+        status["killed jobs"] = self.killed_jobs
 
         # Cpu usage on machine
         times = psutil.cpu_times()
