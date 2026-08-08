@@ -1035,5 +1035,21 @@ Status log
   passing), ``make lint`` clean in all three. Test trees removed after
   the run; ``~/SEAMM_DEV/Mac.ini`` updated to the validated config but
   left deliberately inert (points at a stale shared test env, not
-  something to actually dispatch real dev work to yet). Nothing
-  committed/pushed/released as part of this pass.
+  something to actually dispatch real dev work to yet).
+- **2026-08-08 (Phase 7 + 8, committed/pushed/PRs open)** -- All three
+  packages' working-tree changes committed to their ``dev`` branches
+  (Phase 7 and Phase 8 bundled into one ``seamm_jobserver`` commit, per
+  Paul's call -- simpler than splitting an already-interleaved diff) and
+  pushed. Release prep (HISTORY entries, pre-flight checks, user-guide
+  review/update per the release skill) done for all three; the
+  ``seamm_jobserver`` user guide's "SLURM submission" section corrected
+  in the process -- it previously claimed a job's own process writes its
+  final status directly (no longer true, see Phase 8 sub-step 1) and
+  that ``transport = ssh`` already worked with no shared filesystem (it
+  didn't -- only the script-over-stdin submission mechanism did; nothing
+  staged files or built a remote-usable command line before this PR).
+  PRs open for ``seamm`` review:
+  `seamm_jobserver #18 <https://github.com/molssi-seamm/seamm_jobserver/pull/18>`_,
+  `seamm_slurm #4 <https://github.com/molssi-seamm/seamm_slurm/pull/4>`_,
+  `seamm_exec #31 <https://github.com/molssi-seamm/seamm_exec/pull/31>`_.
+  Not merged or released -- that's ``seamm``'s manual step.
