@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.8.8 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.8.9 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=d318b753"></script>
+    <script src="../../_static/documentation_options.js?v=7760334a"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -61,7 +61,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="search" title="Search" href="../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.8" />
+  <meta name="docsearch:version" content="2026.8.9" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -1442,11 +1442,20 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
 
-        <span class="c1"># Find any jobs already running</span>
+        <span class="c1"># Find any jobs already running. A &#39;running&#39;/&#39;kill&#39; row is a local</span>
+        <span class="c1"># pid or a SLURM submission based on what was actually recorded for</span>
+        <span class="c1"># *that* job, not on whether this JobServer instance is currently</span>
+        <span class="c1"># SLURM-configured -- a row can predate this instance&#39;s SLURM config</span>
+        <span class="c1"># (e.g. its first restart after SLURM was just enabled). So always</span>
+        <span class="c1"># check for local pids first (regardless of mode), then -- only if</span>
+        <span class="c1"># SLURM is configured, since polling needs a backend -- reconcile</span>
+        <span class="c1"># whatever&#39;s left (real SLURM submissions, or rows with neither a</span>
+        <span class="c1"># pid nor a slurm_job_id recorded at all). _reattach_local_jobs</span>
+        <span class="c1"># leaves alone (does not finalize) any row that also has a</span>
+        <span class="c1"># slurm_job_id, so the two passes never fight over the same row.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reattach_local_jobs</span><span class="p">()</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_reattach_slurm_jobs</span><span class="p">()</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_reattach_local_jobs</span><span class="p">()</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tk_root</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_after_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tk_root</span><span class="o">.</span><span class="n">after</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">gui_event_loop</span><span class="p">)</span>
@@ -1482,18 +1491,34 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <span class="k">def</span><span class="w"> </span><span class="nf">_reattach_local_jobs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;On startup, find any locally-run jobs already in progress.</span>
 
+<span class="sd">        Runs unconditionally, regardless of whether this JobServer instance</span>
+<span class="sd">        is currently SLURM-configured -- a &#39;running&#39;/&#39;kill&#39; row with a real</span>
+<span class="sd">        recorded ``pid`` is a genuine local job no matter the instance&#39;s</span>
+<span class="sd">        current mode (e.g. it predates SLURM being enabled here), and must</span>
+<span class="sd">        be checked before anything else gets a chance to treat it as some</span>
+<span class="sd">        other kind of lost job. A row with no ``pid`` but a recorded</span>
+<span class="sd">        ``slurm_job_id`` is deliberately left alone here -- that is</span>
+<span class="sd">        ``_reattach_slurm_jobs``&#39;s job, called separately, only when SLURM</span>
+<span class="sd">        is actually configured (checking it needs a real backend to poll).</span>
+
 <span class="sd">        Also picks up ``kill``-status rows, not just ``running`` ones: a</span>
 <span class="sd">        job whose kill was requested right before a restart still has a</span>
 <span class="sd">        real process that needs to actually be terminated, not just</span>
 <span class="sd">        forgotten about.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-            <span class="s2">&quot;SELECT id, status, json_extract(parameters, &#39;$.pid&#39;)&quot;</span>
+            <span class="s2">&quot;SELECT id, status, path, json_extract(parameters, &#39;$.pid&#39;),&quot;</span>
+            <span class="s2">&quot;       json_extract(parameters, &#39;$.slurm_job_id&#39;)&quot;</span>
             <span class="s2">&quot;  FROM jobs&quot;</span>
             <span class="s2">&quot; WHERE status IN (&#39;running&#39;, &#39;kill&#39;)&quot;</span>
         <span class="p">):</span>
-            <span class="n">job_id</span><span class="p">,</span> <span class="n">orig_status</span><span class="p">,</span> <span class="n">pid</span> <span class="o">=</span> <span class="n">row</span>
+            <span class="n">job_id</span><span class="p">,</span> <span class="n">orig_status</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">slurm_id</span> <span class="o">=</span> <span class="n">row</span>
+
             <span class="k">if</span> <span class="n">pid</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="c1"># A real SLURM submission with no local pid -- not this</span>
+                    <span class="c1"># method&#39;s job to resolve.</span>
+                    <span class="k">continue</span>
                 <span class="n">finished</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">finished</span> <span class="o">=</span> <span class="kc">False</span>
@@ -1501,20 +1526,35 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <span class="n">process</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">pid</span><span class="o">=</span><span class="n">pid</span><span class="p">)</span>
                 <span class="k">except</span> <span class="n">psutil</span><span class="o">.</span><span class="n">NoSuchProcess</span><span class="p">:</span>
                     <span class="n">finished</span> <span class="o">=</span> <span class="kc">True</span>
-                    <span class="k">pass</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">process</span><span class="o">.</span><span class="n">is_running</span><span class="p">():</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                             <span class="s2">&quot;mode&quot;</span><span class="p">:</span> <span class="s2">&quot;local&quot;</span><span class="p">,</span>
                             <span class="s2">&quot;pid&quot;</span><span class="p">:</span> <span class="n">process</span><span class="o">.</span><span class="n">pid</span><span class="p">,</span>
                             <span class="s2">&quot;process&quot;</span><span class="p">:</span> <span class="n">process</span><span class="p">,</span>
+                            <span class="s2">&quot;wdir&quot;</span><span class="p">:</span> <span class="n">wdir</span><span class="p">,</span>
                         <span class="p">}</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">_times</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
                     <span class="k">else</span><span class="p">:</span>
                         <span class="n">finished</span> <span class="o">=</span> <span class="kc">True</span>
+
             <span class="k">if</span> <span class="n">finished</span><span class="p">:</span>
-                <span class="n">final_status</span> <span class="o">=</span> <span class="s2">&quot;killed&quot;</span> <span class="k">if</span> <span class="n">orig_status</span> <span class="o">==</span> <span class="s2">&quot;kill&quot;</span> <span class="k">else</span> <span class="s2">&quot;finished&quot;</span>
+                <span class="k">if</span> <span class="n">orig_status</span> <span class="o">==</span> <span class="s2">&quot;kill&quot;</span><span class="p">:</span>
+                    <span class="n">final_status</span> <span class="o">=</span> <span class="s2">&quot;killed&quot;</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># Trust job_data.json&#39;s own verdict over assuming</span>
+                    <span class="c1"># success just because the process ended -- the same</span>
+                    <span class="c1"># principle applied everywhere else a job&#39;s outcome is</span>
+                    <span class="c1"># determined (see _check_for_finished_jobs_local).</span>
+                    <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_job_data_state</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
+                    <span class="n">final_status</span> <span class="o">=</span> <span class="n">state</span> <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;finished&quot;</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> already </span><span class="si">{</span><span class="n">final_status</span><span class="si">}</span><span class="s2"> (pid=</span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">orig_status</span> <span class="o">==</span> <span class="s2">&quot;kill&quot;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">killed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">elif</span> <span class="n">final_status</span> <span class="o">==</span> <span class="s2">&quot;finished&quot;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">successful_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
                 <span class="k">try</span><span class="p">:</span>
                     <span class="n">current_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
                     <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
@@ -1540,14 +1580,26 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <span class="k">def</span><span class="w"> </span><span class="nf">_reattach_slurm_jobs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;On startup, find any SLURM-submitted jobs already in progress.</span>
 
+<span class="sd">        Called separately from, and after, ``_reattach_local_jobs`` -- and</span>
+<span class="sd">        only when this JobServer instance is actually SLURM-configured,</span>
+<span class="sd">        since polling needs a real backend. A row with a recorded ``pid``</span>
+<span class="sd">        is skipped entirely here: ``_reattach_local_jobs`` (called first,</span>
+<span class="sd">        unconditionally) already resolved it one way or another -- either</span>
+<span class="sd">        it&#39;s still tracked as a genuine local process, or it was just</span>
+<span class="sd">        finalized -- and treating it as a lost SLURM submission here too</span>
+<span class="sd">        would be wrong on both counts (double-tracking a live local job as</span>
+<span class="sd">        also needing SLURM reconciliation, or trying to stage-out/resubmit</span>
+<span class="sd">        a job that never went anywhere near SLURM in the first place).</span>
+
 <span class="sd">        SLURM is the source of truth here, not any state JobServer itself</span>
 <span class="sd">        remembered before restarting: look up each `running`-status job&#39;s</span>
 <span class="sd">        last known `slurm_job_id` and ask SLURM. Still pending/running -&gt;</span>
 <span class="sd">        resume tracking it. Terminal, gone, or never even got a</span>
-<span class="sd">        `slurm_job_id` recorded (JobServer died mid-submission) -&gt; the same</span>
-<span class="sd">        reconciliation path as the steady-state case (trust job_data.json,</span>
-<span class="sd">        else resubmit up to a cap, else give up) -- safe because flowcharts</span>
-<span class="sd">        checkpoint completed steps and safely resume.</span>
+<span class="sd">        `slurm_job_id` recorded (JobServer died mid-submission, or it&#39;s a</span>
+<span class="sd">        stray row from before SLURM was ever configured on this instance)</span>
+<span class="sd">        -&gt; the same reconciliation path as the steady-state case (trust</span>
+<span class="sd">        job_data.json, else resubmit up to a cap, else give up) -- safe</span>
+<span class="sd">        because flowcharts checkpoint completed steps and safely resume.</span>
 
 <span class="sd">        Also picks up ``kill``-status rows, not just ``running`` ones -- a</span>
 <span class="sd">        job whose kill was requested right before a restart still needs its</span>
@@ -1556,7 +1608,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">rows</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-                <span class="s2">&quot;SELECT id, status, path, json_extract(parameters, &#39;$.slurm_job_id&#39;),&quot;</span>
+                <span class="s2">&quot;SELECT id, status, path, json_extract(parameters, &#39;$.pid&#39;),&quot;</span>
+                <span class="s2">&quot;       json_extract(parameters, &#39;$.slurm_job_id&#39;),&quot;</span>
                 <span class="s2">&quot;       json_extract(parameters, &#39;$.cmdline&#39;),&quot;</span>
                 <span class="s2">&quot;       json_extract(parameters, &#39;$.resubmit_count&#39;),&quot;</span>
                 <span class="s2">&quot;       json_extract(parameters, &#39;$.slurm&#39;)&quot;</span>
@@ -1568,7 +1621,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="k">return</span>
 
         <span class="n">ids</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="nb">str</span><span class="p">(</span><span class="n">slurm_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">slurm_id</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rows</span> <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">slurm_id</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">slurm_id</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rows</span>
+            <span class="k">if</span> <span class="n">pid</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="p">]</span>
         <span class="n">statuses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm_backend</span><span class="o">.</span><span class="n">poll_many</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="k">if</span> <span class="n">ids</span> <span class="k">else</span> <span class="p">{}</span>
 
@@ -1576,22 +1631,30 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="n">job_id</span><span class="p">,</span>
             <span class="n">orig_status</span><span class="p">,</span>
             <span class="n">wdir</span><span class="p">,</span>
+            <span class="n">pid</span><span class="p">,</span>
             <span class="n">slurm_id</span><span class="p">,</span>
             <span class="n">cmdline_json</span><span class="p">,</span>
             <span class="n">resubmit_count</span><span class="p">,</span>
             <span class="n">slurm_overrides_json</span><span class="p">,</span>
         <span class="p">)</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">pid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># Already resolved by _reattach_local_jobs.</span>
+                <span class="k">continue</span>
+
             <span class="n">resubmit_count</span> <span class="o">=</span> <span class="n">resubmit_count</span> <span class="ow">or</span> <span class="mi">0</span>
             <span class="n">cmdline</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">cmdline_json</span><span class="p">)</span> <span class="k">if</span> <span class="n">cmdline_json</span> <span class="k">else</span> <span class="p">[]</span>
             <span class="n">slurm_overrides</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">slurm_overrides_json</span><span class="p">)</span> <span class="k">if</span> <span class="n">slurm_overrides_json</span> <span class="k">else</span> <span class="p">{}</span>
             <span class="p">)</span>
-            <span class="c1"># Recomputed, not stored: a pure function of wdir + this</span>
-            <span class="c1"># section&#39;s remote_root, so it&#39;s safe to derive fresh here for</span>
-            <span class="c1"># a job reattached after a restart, the same way a freshly</span>
-            <span class="c1"># submitted job gets it from _start_job_slurm.</span>
+            <span class="c1"># Only meaningful -- and only computed -- for a job that was</span>
+            <span class="c1"># actually dispatched to SLURM before (a real slurm_job_id is</span>
+            <span class="c1"># on record): there&#39;s nothing remote to reconcile for a row</span>
+            <span class="c1"># that never went there, and computing/using it anyway is</span>
+            <span class="c1"># exactly the bug this docstring warns about above.</span>
             <span class="n">remote_wdir</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_remote_wdir</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">&quot;ssh&quot;</span> <span class="k">else</span> <span class="kc">None</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_remote_wdir</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slurm</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">&quot;ssh&quot;</span>
+                <span class="k">else</span> <span class="kc">None</span>
             <span class="p">)</span>
 
             <span class="n">status</span> <span class="o">=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">slurm_id</span><span class="p">))</span> <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>

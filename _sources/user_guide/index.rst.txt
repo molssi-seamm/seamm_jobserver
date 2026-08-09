@@ -114,6 +114,15 @@ JobServer itself restarts (it re-checks every job still marked ``running``
 against SLURM on startup) -- restarting the JobServer does not lose track of
 or duplicate submissions for jobs that are still genuinely alive in SLURM.
 
+This also covers the moment SLURM mode is enabled for the first time on an
+instance that already has jobs running as ordinary local subprocesses (or
+had one crash before it got a chance to record its own outcome): each
+``running``/``kill`` row is reattached based on what was actually recorded
+for that specific job -- a local process id or a SLURM job id -- not on
+whether SLURM is configured right now. A pre-existing local job is never
+mistaken for a lost SLURM submission just because SLURM has since been
+turned on.
+
 No shared filesystem
 ---------------------
 

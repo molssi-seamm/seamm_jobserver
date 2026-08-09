@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.8.8 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.8.9 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=d318b753"></script>
+    <script src="_static/documentation_options.js?v=7760334a"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Credits" href="authors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.8" />
+  <meta name="docsearch:version" content="2026.8.9" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -506,6 +506,25 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.8.9 – Bugfix: startup reattachment could misapply SLURM staging to a local job</dt><dd><ul class="simple">
+<li><p>On restart, a job’s <code class="docutils literal notranslate"><span class="pre">running</span></code>/<code class="docutils literal notranslate"><span class="pre">kill</span></code> datastore row was reattached
+based on whether the JobServer instance is <em>currently</em>
+SLURM-configured, not on what that specific job actually is. A local
+job predating SLURM being enabled on this instance (or, worse, one
+still genuinely running) could be treated as a lost SLURM submission:
+at best retrying a pointless remote file transfer forever instead of
+reading its already-correct local status, at worst getting resubmitted
+via SLURM as a real duplicate run of a job still running locally.
+Reattachment now checks each job’s own recorded pid or SLURM job id,
+not the instance’s current mode, so a local job is always recognized
+as local regardless of whether SLURM is configured.</p></li>
+<li><p>Bugfix: a locally-run job resumed after a restart could raise an
+error the next time it finished, from a missing internal field.</p></li>
+<li><p>A locally-run job whose process ended with no other evidence of its
+outcome now has its actual result read from the job’s own record
+rather than being assumed successful.</p></li>
+</ul>
+</dd>
 <dt>2026.8.8 – Support SLURM dispatch to a cluster with no shared filesystem</dt><dd><ul class="simple">
 <li><p>A JobServer can now dispatch jobs via SLURM to a cluster it shares no
 filesystem with – for example, a laptop reaching a remote cluster

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.8.8 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.8.9 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=d318b753"></script>
+    <script src="../_static/documentation_options.js?v=7760334a"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Getting Started" href="../getting_started/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.8" />
+  <meta name="docsearch:version" content="2026.8.9" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -604,6 +604,14 @@ than starting over.</p></li>
 JobServer itself restarts (it re-checks every job still marked <code class="docutils literal notranslate"><span class="pre">running</span></code>
 against SLURM on startup) – restarting the JobServer does not lose track of
 or duplicate submissions for jobs that are still genuinely alive in SLURM.</p>
+<p>This also covers the moment SLURM mode is enabled for the first time on an
+instance that already has jobs running as ordinary local subprocesses (or
+had one crash before it got a chance to record its own outcome): each
+<code class="docutils literal notranslate"><span class="pre">running</span></code>/<code class="docutils literal notranslate"><span class="pre">kill</span></code> row is reattached based on what was actually recorded
+for that specific job – a local process id or a SLURM job id – not on
+whether SLURM is configured right now. A pre-existing local job is never
+mistaken for a lost SLURM submission just because SLURM has since been
+turned on.</p>
 </section>
 <section id="no-shared-filesystem">
 <h3>No shared filesystem<a class="headerlink" href="#no-shared-filesystem" title="Link to this heading">#</a></h3>
