@@ -1069,3 +1069,43 @@ Status log
   commit, it does not install from PyPI, so only the tag needs to exist.
   **Phase 8 (and the bundled Phase 7) are now fully shipped**: all three
   packages at ``2026.8.8``, ``dev == main`` in all three local checkouts.
+- **2026-08-09 (enabling it for real surfaced a real reattachment bug,
+  fixed)** -- Before turning Phase 8 on for real dev use: upgraded
+  ``seamm_exec`` in molssi10's own production ``seamm`` conda env
+  (2026.8.1 -> 2026.8.8, Paul's explicit choice to reuse that env over a
+  separate dedicated one -- confirmed ``squeue`` empty first, confirmed
+  molssi10's own resident JobServer/Dashboard services stayed undisturbed
+  since a pip upgrade on disk doesn't touch an already-running process),
+  pointed ``~/SEAMM_DEV/Mac.ini``'s ``remote_run_from_jobserver`` at it,
+  and restarted the ``~/SEAMM_DEV`` JobServer (``launchctl kickstart``,
+  it's launchd-managed). That restart is what surfaced a real bug:
+  ``start()`` picked exactly one of ``_reattach_local_jobs``/
+  ``_reattach_slurm_jobs`` based on whether the instance is *currently*
+  SLURM-configured, not on what each individual ``running`` row actually
+  is -- so a stale local job from before SLURM was ever enabled here (a
+  real one: ``Job_003881``, crashed with an MDI error hours earlier,
+  ``job_data.json`` correctly said ``error`` but the datastore row was
+  never corrected, since the *old* pre-restart code was still running)
+  fell to ``_reattach_slurm_jobs``, which unconditionally tried to
+  ``stage_out`` from a molssi10 directory that was never created (this
+  job never went anywhere near SLURM) -- would have retried forever
+  rather than ever reading the local ``job_data.json`` that already had
+  the answer. Worse in general, a genuinely still-running local job at
+  restart time would have hit the same path and been resubmitted via
+  SLURM as a real duplicate run. Fixed properly (not just worked around):
+  ``_reattach_local_jobs`` now always runs first regardless of mode and
+  leaves SLURM-recorded rows alone; ``_reattach_slurm_jobs`` skips any
+  row with a recorded pid and only computes/uses ``remote_wdir`` for a
+  row that actually has a ``slurm_job_id`` on record. Also fixed in the
+  same pass: the reattached local-job tracking dict was missing
+  ``"wdir"`` (a latent bug from the previous commit -- would have
+  KeyError'd once such a job finished) and a dead local process with no
+  other evidence now trusts ``job_data.json`` instead of blindly
+  assuming success. ``Job_003881`` itself was hand-corrected first
+  (``UPDATE jobs SET status='error'...``, matching its own
+  ``job_data.json``) so the restart wouldn't hit the bug before the fix
+  was even written. 6 new tests (58 total), ``make lint`` clean,
+  installed and the live ``~/SEAMM_DEV`` JobServer restarted again with
+  the fix -- confirmed clean (``"Jobs": {}``, ``"previous jobs": 0``, no
+  crash-restart loop). Committed locally (``dev``); not yet pushed, PR'd,
+  or released.
