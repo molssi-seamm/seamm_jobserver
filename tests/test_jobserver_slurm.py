@@ -13,6 +13,7 @@ import json
 import sqlite3
 from unittest import mock
 
+import psutil
 import pytest
 
 from seamm_jobserver.jobserver import JobServer
@@ -774,6 +775,164 @@ def test_reattach_no_running_jobs_is_a_no_op(db_path, tmp_path):
     js = make_jobserver(db_path, tmp_path)
     js._reattach_slurm_jobs()  # should not raise, no SLURM calls needed
     assert js._jobs == {}
+
+
+# ---- reattachment: local pid vs SLURM job id, not current mode ------------
+#
+# A 'running'/'kill' row is a local pid or a SLURM submission based on what
+# was actually recorded for *that* job, not on this instance's current
+# mode -- a row can predate this JobServer instance's SLURM config being
+# enabled. _reattach_local_jobs runs unconditionally (regardless of mode)
+# and must not misappropriate a genuine SLURM row; _reattach_slurm_jobs
+# must not misappropriate a genuine local row (in particular: must not
+# compute/use a remote_wdir, i.e. attempt to stage_out, for a job that
+# never actually went to SLURM).
+
+
+def test_reattach_local_jobs_leaves_slurm_row_alone(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(
+        db_path,
+        1,
+        "running",
+        str(wdir),
+        extra_params={"slurm_job_id": "42", "resubmit_count": 0},
+    )
+
+    js = make_local_jobserver(db_path)
+    js._reattach_local_jobs()
+
+    assert 1 not in js._jobs
+    assert get_job(db_path, 1)[0] == "running"  # untouched, not finalized
+
+
+def test_reattach_local_jobs_dead_process_trusts_job_data_json_error(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    (wdir / "job_data.json").write_text('!MolSSI job_data 1.0\n{"state": "error"}\n')
+    insert_job(db_path, 1, "running", str(wdir), extra_params={"pid": 4242})
+
+    js = make_local_jobserver(db_path)
+    with mock.patch("psutil.Process", side_effect=psutil.NoSuchProcess(4242)):
+        js._reattach_local_jobs()
+
+    assert get_job(db_path, 1)[0] == "error"
+    assert js.failed_jobs == 1
+    assert js.successful_jobs == 0
+
+
+def test_reattach_local_jobs_dead_process_no_job_data_json_defaults_finished(
+    db_path, tmp_path
+):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir), extra_params={"pid": 4242})
+
+    js = make_local_jobserver(db_path)
+    with mock.patch("psutil.Process", side_effect=psutil.NoSuchProcess(4242)):
+        js._reattach_local_jobs()
+
+    assert get_job(db_path, 1)[0] == "finished"
+    assert js.successful_jobs == 1
+
+
+def test_reattach_local_jobs_still_running_tracks_wdir(db_path, tmp_path):
+    # Regression check: the re-tracked dict must include "wdir" -- without
+    # it, a later check_for_finished_jobs() call KeyErrors trying to read
+    # job_data.json once the process actually ends.
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir), extra_params={"pid": 4242})
+
+    js = make_local_jobserver(db_path)
+    running_process = FakeProcess(running=True)
+    running_process.pid = 4242
+    with mock.patch("psutil.Process", return_value=running_process):
+        js._reattach_local_jobs()
+
+    assert js._jobs[1]["wdir"] == str(wdir)
+
+    # Now it finishes -- must not raise.
+    (wdir / "job_data.json").write_text('!MolSSI job_data 1.0\n{"state": "finished"}\n')
+    running_process._running = False
+    js.check_for_finished_jobs()
+
+    assert get_job(db_path, 1)[0] == "finished"
+
+
+def test_reattach_slurm_jobs_skips_row_with_pid(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir), extra_params={"pid": 4242})
+
+    js = make_jobserver(db_path, wdir)
+    js._reattach_slurm_jobs()
+
+    assert 1 not in js._jobs
+    assert js._slurm_backend.submitted == []
+    assert js._slurm_backend.cancelled == []
+    assert get_job(db_path, 1)[0] == "running"  # untouched
+
+
+def test_reattach_local_then_slurm_no_double_handling(db_path, tmp_path):
+    # Mirrors start()'s actual call sequence with a realistic mixed set:
+    # a genuine still-running local job, a genuine still-pending SLURM job,
+    # and a "died under the old local-only code" job (real pid, dead
+    # process, job_data.json already says error -- the live bug this was
+    # written for).
+    local_wdir = tmp_path / "Job_1"
+    local_wdir.mkdir()
+    insert_job(db_path, 1, "running", str(local_wdir), extra_params={"pid": 111})
+
+    slurm_wdir = tmp_path / "Job_2"
+    slurm_wdir.mkdir()
+    insert_job(
+        db_path,
+        2,
+        "running",
+        str(slurm_wdir),
+        extra_params={"slurm_job_id": "42", "resubmit_count": 0},
+    )
+
+    stale_wdir = tmp_path / "Job_3"
+    stale_wdir.mkdir()
+    (stale_wdir / "job_data.json").write_text(
+        '!MolSSI job_data 1.0\n{"state": "error"}\n'
+    )
+    insert_job(db_path, 3, "running", str(stale_wdir), extra_params={"pid": 333})
+
+    js = make_jobserver(db_path, tmp_path)
+    js._slurm_backend.statuses["42"] = JobStatus(
+        job_id="42", state="PENDING", category="pending"
+    )
+
+    running_process = FakeProcess(running=True)
+    running_process.pid = 111
+
+    def fake_process(pid):
+        if pid == 111:
+            return running_process
+        raise psutil.NoSuchProcess(pid)
+
+    with mock.patch("psutil.Process", side_effect=fake_process):
+        js._reattach_local_jobs()
+    js._reattach_slurm_jobs()
+
+    # Job 1: genuine local job, still tracked, untouched by the SLURM pass.
+    assert js._jobs[1]["mode"] == "local"
+    assert js._jobs[1]["wdir"] == str(local_wdir)
+    assert get_job(db_path, 1)[0] == "running"
+
+    # Job 2: genuine SLURM job, tracked by the SLURM pass.
+    assert js._jobs[2]["mode"] == "slurm"
+    assert js._jobs[2]["slurm_job_id"] == "42"
+
+    # Job 3: resolved entirely by the local pass (job_data.json trusted);
+    # never reached the SLURM pass, so no bogus stage_out/resubmit.
+    assert 3 not in js._jobs
+    assert get_job(db_path, 3)[0] == "error"
+    assert js._slurm_backend.submitted == []
 
 
 # ---- _read_job_data_state --------------------------------------------------

@@ -902,11 +902,20 @@ class JobServer(collections.abc.MutableMapping):
         if self.options is None:
             self.initialize()
 
-        # Find any jobs already running
+        # Find any jobs already running. A 'running'/'kill' row is a local
+        # pid or a SLURM submission based on what was actually recorded for
+        # *that* job, not on whether this JobServer instance is currently
+        # SLURM-configured -- a row can predate this instance's SLURM config
+        # (e.g. its first restart after SLURM was just enabled). So always
+        # check for local pids first (regardless of mode), then -- only if
+        # SLURM is configured, since polling needs a backend -- reconcile
+        # whatever's left (real SLURM submissions, or rows with neither a
+        # pid nor a slurm_job_id recorded at all). _reattach_local_jobs
+        # leaves alone (does not finalize) any row that also has a
+        # slurm_job_id, so the two passes never fight over the same row.
+        self._reattach_local_jobs()
         if self._slurm is not None:
             self._reattach_slurm_jobs()
-        else:
-            self._reattach_local_jobs()
 
         if self._tk_root is not None:
             self._after_id = self._tk_root.after(10, self.gui_event_loop)
@@ -941,18 +950,34 @@ class JobServer(collections.abc.MutableMapping):
     def _reattach_local_jobs(self):
         """On startup, find any locally-run jobs already in progress.
 
+        Runs unconditionally, regardless of whether this JobServer instance
+        is currently SLURM-configured -- a 'running'/'kill' row with a real
+        recorded ``pid`` is a genuine local job no matter the instance's
+        current mode (e.g. it predates SLURM being enabled here), and must
+        be checked before anything else gets a chance to treat it as some
+        other kind of lost job. A row with no ``pid`` but a recorded
+        ``slurm_job_id`` is deliberately left alone here -- that is
+        ``_reattach_slurm_jobs``'s job, called separately, only when SLURM
+        is actually configured (checking it needs a real backend to poll).
+
         Also picks up ``kill``-status rows, not just ``running`` ones: a
         job whose kill was requested right before a restart still has a
         real process that needs to actually be terminated, not just
         forgotten about.
         """
         for row in self.db.execute(
-            "SELECT id, status, json_extract(parameters, '$.pid')"
+            "SELECT id, status, path, json_extract(parameters, '$.pid'),"
+            "       json_extract(parameters, '$.slurm_job_id')"
             "  FROM jobs"
             " WHERE status IN ('running', 'kill')"
         ):
-            job_id, orig_status, pid = row
+            job_id, orig_status, wdir, pid, slurm_id = row
+
             if pid is None:
+                if slurm_id is not None:
+                    # A real SLURM submission with no local pid -- not this
+                    # method's job to resolve.
+                    continue
                 finished = True
             else:
                 finished = False
@@ -960,20 +985,35 @@ class JobServer(collections.abc.MutableMapping):
                     process = psutil.Process(pid=pid)
                 except psutil.NoSuchProcess:
                     finished = True
-                    pass
                 else:
                     if process.is_running():
                         self._jobs[job_id] = {
                             "mode": "local",
                             "pid": process.pid,
                             "process": process,
+                            "wdir": wdir,
                         }
                         self._times[job_id] = {}
                     else:
                         finished = True
+
             if finished:
-                final_status = "killed" if orig_status == "kill" else "finished"
+                if orig_status == "kill":
+                    final_status = "killed"
+                else:
+                    # Trust job_data.json's own verdict over assuming
+                    # success just because the process ended -- the same
+                    # principle applied everywhere else a job's outcome is
+                    # determined (see _check_for_finished_jobs_local).
+                    state = self._read_job_data_state(wdir)
+                    final_status = state if state is not None else "finished"
                 self.logger.info(f"Job {job_id} already {final_status} (pid={pid}).")
+                if orig_status == "kill":
+                    self.killed_jobs += 1
+                elif final_status == "finished":
+                    self.successful_jobs += 1
+                else:
+                    self.failed_jobs += 1
                 try:
                     current_time = datetime.now(timezone.utc)
                     cursor = self.db.cursor()
@@ -999,14 +1039,26 @@ class JobServer(collections.abc.MutableMapping):
     def _reattach_slurm_jobs(self):
         """On startup, find any SLURM-submitted jobs already in progress.
 
+        Called separately from, and after, ``_reattach_local_jobs`` -- and
+        only when this JobServer instance is actually SLURM-configured,
+        since polling needs a real backend. A row with a recorded ``pid``
+        is skipped entirely here: ``_reattach_local_jobs`` (called first,
+        unconditionally) already resolved it one way or another -- either
+        it's still tracked as a genuine local process, or it was just
+        finalized -- and treating it as a lost SLURM submission here too
+        would be wrong on both counts (double-tracking a live local job as
+        also needing SLURM reconciliation, or trying to stage-out/resubmit
+        a job that never went anywhere near SLURM in the first place).
+
         SLURM is the source of truth here, not any state JobServer itself
         remembered before restarting: look up each `running`-status job's
         last known `slurm_job_id` and ask SLURM. Still pending/running ->
         resume tracking it. Terminal, gone, or never even got a
-        `slurm_job_id` recorded (JobServer died mid-submission) -> the same
-        reconciliation path as the steady-state case (trust job_data.json,
-        else resubmit up to a cap, else give up) -- safe because flowcharts
-        checkpoint completed steps and safely resume.
+        `slurm_job_id` recorded (JobServer died mid-submission, or it's a
+        stray row from before SLURM was ever configured on this instance)
+        -> the same reconciliation path as the steady-state case (trust
+        job_data.json, else resubmit up to a cap, else give up) -- safe
+        because flowcharts checkpoint completed steps and safely resume.
 
         Also picks up ``kill``-status rows, not just ``running`` ones -- a
         job whose kill was requested right before a restart still needs its
@@ -1015,7 +1067,8 @@ class JobServer(collections.abc.MutableMapping):
         """
         rows = list(
             self.db.execute(
-                "SELECT id, status, path, json_extract(parameters, '$.slurm_job_id'),"
+                "SELECT id, status, path, json_extract(parameters, '$.pid'),"
+                "       json_extract(parameters, '$.slurm_job_id'),"
                 "       json_extract(parameters, '$.cmdline'),"
                 "       json_extract(parameters, '$.resubmit_count'),"
                 "       json_extract(parameters, '$.slurm')"
@@ -1027,7 +1080,9 @@ class JobServer(collections.abc.MutableMapping):
             return
 
         ids = [
-            str(slurm_id) for _, _, _, slurm_id, _, _, _ in rows if slurm_id is not None
+            str(slurm_id)
+            for _, _, _, pid, slurm_id, _, _, _ in rows
+            if pid is None and slurm_id is not None
         ]
         statuses = self._slurm_backend.poll_many(ids) if ids else {}
 
@@ -1035,22 +1090,30 @@ class JobServer(collections.abc.MutableMapping):
             job_id,
             orig_status,
             wdir,
+            pid,
             slurm_id,
             cmdline_json,
             resubmit_count,
             slurm_overrides_json,
         ) in rows:
+            if pid is not None:
+                # Already resolved by _reattach_local_jobs.
+                continue
+
             resubmit_count = resubmit_count or 0
             cmdline = json.loads(cmdline_json) if cmdline_json else []
             slurm_overrides = (
                 json.loads(slurm_overrides_json) if slurm_overrides_json else {}
             )
-            # Recomputed, not stored: a pure function of wdir + this
-            # section's remote_root, so it's safe to derive fresh here for
-            # a job reattached after a restart, the same way a freshly
-            # submitted job gets it from _start_job_slurm.
+            # Only meaningful -- and only computed -- for a job that was
+            # actually dispatched to SLURM before (a real slurm_job_id is
+            # on record): there's nothing remote to reconcile for a row
+            # that never went there, and computing/using it anyway is
+            # exactly the bug this docstring warns about above.
             remote_wdir = (
-                self._remote_wdir(wdir) if self._slurm.transport == "ssh" else None
+                self._remote_wdir(wdir)
+                if slurm_id is not None and self._slurm.transport == "ssh"
+                else None
             )
 
             status = statuses.get(str(slurm_id)) if slurm_id is not None else None

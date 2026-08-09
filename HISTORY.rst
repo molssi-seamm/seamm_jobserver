@@ -1,6 +1,24 @@
 =======
 History
 =======
+2026.8.9 -- Bugfix: startup reattachment could misapply SLURM staging to a local job
+    * On restart, a job's ``running``/``kill`` datastore row was reattached
+      based on whether the JobServer instance is *currently*
+      SLURM-configured, not on what that specific job actually is. A local
+      job predating SLURM being enabled on this instance (or, worse, one
+      still genuinely running) could be treated as a lost SLURM submission:
+      at best retrying a pointless remote file transfer forever instead of
+      reading its already-correct local status, at worst getting resubmitted
+      via SLURM as a real duplicate run of a job still running locally.
+      Reattachment now checks each job's own recorded pid or SLURM job id,
+      not the instance's current mode, so a local job is always recognized
+      as local regardless of whether SLURM is configured.
+    * Bugfix: a locally-run job resumed after a restart could raise an
+      error the next time it finished, from a missing internal field.
+    * A locally-run job whose process ended with no other evidence of its
+      outcome now has its actual result read from the job's own record
+      rather than being assumed successful.
+
 2026.8.8 -- Support SLURM dispatch to a cluster with no shared filesystem
     * A JobServer can now dispatch jobs via SLURM to a cluster it shares no
       filesystem with -- for example, a laptop reaching a remote cluster
