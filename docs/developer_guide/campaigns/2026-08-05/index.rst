@@ -1107,5 +1107,10 @@ Status log
   was even written. 6 new tests (58 total), ``make lint`` clean,
   installed and the live ``~/SEAMM_DEV`` JobServer restarted again with
   the fix -- confirmed clean (``"Jobs": {}``, ``"previous jobs": 0``, no
-  crash-restart loop). Committed locally (``dev``); not yet pushed, PR'd,
-  or released.
+  crash-restart loop). Pushed and PR'd through the same release-skill
+  cycle as the rest of Phase 8: HISTORY entry (``2026.8.9``, a new day so
+  not a same-day ``.1``), pre-flight checks, a small User Guide addition
+  clarifying that reattachment is now correctly per-job rather than
+  per-instance-mode. `PR #19
+  <https://github.com/molssi-seamm/seamm_jobserver/pull/19>`_ open for
+  ``seamm`` review; not yet merged or released.
