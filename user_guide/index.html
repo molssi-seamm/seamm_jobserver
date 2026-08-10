@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.8.9 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.8.10 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=7760334a"></script>
+    <script src="../_static/documentation_options.js?v=7ddc0e42"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Getting Started" href="../getting_started/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.9" />
+  <meta name="docsearch:version" content="2026.8.10" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -524,14 +524,18 @@ system/machine config file, like <code class="docutils literal notranslate"><spa
 at <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;</span></code> (the same directory as those), not in
 <code class="docutils literal notranslate"><span class="pre">~/.seamm.d/seamm.ini</span></code>. If the file doesn’t exist, the JobServer runs jobs
 locally exactly as it always has.</p>
-<p>The file has one section per cluster/queue this JobServer instance can
-submit to (currently only one is actually used – selecting among several is
-not yet implemented, see below):</p>
+<p>The file has one section per queue (cluster, or a plain local subprocess –
+see “Multiple queues” below) this JobServer instance can route jobs to:</p>
 <div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[DEFAULT]</span>
-<span class="c1"># which section to use -- required if there&#39;s more than one section</span>
+<span class="c1"># which section a job uses when it doesn&#39;t request one explicitly --</span>
+<span class="c1"># required if there&#39;s more than one section and none of the shortcuts</span>
+<span class="c1"># below apply</span>
 <span class="na">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">molssi10</span>
 
 <span class="k">[molssi10]</span>
+<span class="c1"># type: slurm (the default if omitted) | local -- see &quot;Multiple</span>
+<span class="c1"># queues&quot; below for type = local</span>
+<span class="na">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">slurm</span>
 <span class="c1"># transport: local (SLURM CLI on this host) | ssh (SLURM CLI on a</span>
 <span class="c1"># remote host, reached over passwordless SSH)</span>
 <span class="na">transport</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">local</span>
@@ -553,7 +557,7 @@ not yet implemented, see below):</p>
 <span class="na">gpus</span><span class="w"> </span><span class="o">=</span>
 
 <span class="c1"># JobServer behavior, not SLURM directives:</span>
-<span class="c1"># how many jobs this instance keeps outstanding in SLURM at once</span>
+<span class="c1"># how many jobs this instance keeps outstanding in this queue at once</span>
 <span class="na">max_concurrent_jobs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">20</span>
 <span class="c1"># how many times to resubmit a job SLURM lost track of (see below)</span>
 <span class="c1"># before giving up and marking it &quot;error&quot;</span>
@@ -564,6 +568,44 @@ not yet implemented, see below):</p>
 let SLURM’s own defaults apply.</p>
 <p>If there’s exactly one section (besides <code class="docutils literal notranslate"><span class="pre">[DEFAULT]</span></code>), it’s used
 automatically and <code class="docutils literal notranslate"><span class="pre">default</span> <span class="pre">=</span></code> is optional.</p>
+</section>
+<section id="multiple-queues">
+<h3>Multiple queues<a class="headerlink" href="#multiple-queues" title="Link to this heading">#</a></h3>
+<p>A config file can describe more than one queue, and a job can ask for a
+specific one via <code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span></code> (a plain string, e.g.
+<code class="docutils literal notranslate"><span class="pre">{&quot;cmdline&quot;:</span> <span class="pre">[...],</span> <span class="pre">&quot;queue&quot;:</span> <span class="pre">&quot;molssi10&quot;}</span></code>) – a JobServer instance with,
+say, <code class="docutils literal notranslate"><span class="pre">local</span></code> and <code class="docutils literal notranslate"><span class="pre">molssi10</span></code> sections can run some jobs here and dispatch
+others to a real cluster, from one process:</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[DEFAULT]</span>
+<span class="na">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">local</span>
+
+<span class="k">[local]</span>
+<span class="c1"># No scheduler at all -- runs as a plain local subprocess, the same as</span>
+<span class="c1"># if no ini file existed. SLURM-only keys (transport, partition,</span>
+<span class="c1"># max_resubmits, ...) don&#39;t apply to a type = local section.</span>
+<span class="na">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">local</span>
+<span class="na">max_concurrent_jobs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">5</span>
+
+<span class="k">[molssi10]</span>
+<span class="na">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">slurm</span>
+<span class="na">transport</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">local</span>
+<span class="na">partition</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">batch</span>
+<span class="na">max_concurrent_jobs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">20</span>
+</pre></div>
+</div>
+<p>A job that doesn’t set <code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span></code> at all uses the instance’s
+default queue (<code class="docutils literal notranslate"><span class="pre">[DEFAULT]</span> <span class="pre">default</span> <span class="pre">=</span></code>, or the sole section if there’s only
+one) – existing jobs/configs from before this feature existed are
+unaffected. A job that requests a queue this instance doesn’t have
+configured, or requests none at all when there’s no default to fall back
+to, fails immediately as a <code class="docutils literal notranslate"><span class="pre">startup</span> <span class="pre">error</span></code> rather than silently running
+somewhere unintended.</p>
+<p>Each queue’s <code class="docutils literal notranslate"><span class="pre">max_concurrent_jobs</span></code> is enforced independently – one queue
+being full never blocks another from accepting new jobs. SLURM polling is
+batched per queue (one <code class="docutils literal notranslate"><span class="pre">squeue</span></code>/<code class="docutils literal notranslate"><span class="pre">sacct</span></code> call per distinct cluster, not
+per job), which also matters for correctness: two different clusters can
+coincidentally reuse the same SLURM job id number, and per-queue batching
+keeps those from ever being compared against each other.</p>
 </section>
 <section id="what-happens">
 <h3>What happens<a class="headerlink" href="#what-happens" title="Link to this heading">#</a></h3>
@@ -588,8 +630,12 @@ local-subprocess mode. (The job still writes its own <code class="docutils liter
 its working directory, same as always; the JobServer just reads that back
 rather than trusting the job to reach the datastore directly, which isn’t
 even possible for a job dispatched to a remote host with no shared
-filesystem.) Once SLURM reports a job’s state as terminal (or has no
-record of it at all), the JobServer:</p>
+filesystem.) The JobServer also adds <code class="docutils literal notranslate"><span class="pre">queue</span></code> (and, for a SLURM job, its
+<code class="docutils literal notranslate"><span class="pre">slurm_job_id</span></code>) to <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> itself once the job finishes –
+the running flowchart process has no notion of “queue” at all, so this is
+the one place a user can see which cluster a job actually ran on. Once
+SLURM reports a job’s state as terminal (or has no record of it at all),
+the JobServer:</p>
 <ol class="arabic simple">
 <li><p>Trusts the job’s own <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> if the run got far enough to
 write one, and writes that outcome (<code class="docutils literal notranslate"><span class="pre">finished</span></code>/<code class="docutils literal notranslate"><span class="pre">error</span></code>) to the
@@ -699,15 +745,14 @@ changed in the meantime, since the section was already validated against at
 submission time.</p>
 <p>This ini format is implemented in <code class="docutils literal notranslate"><span class="pre">seamm_slurm.config</span></code> (not
 <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> itself), specifically so other, more lightweight
-consumers – a future job-submission UI, for instance – can read and
-validate it without depending on the rest of the SEAMM stack.</p>
+consumers can read and validate it without depending on the rest of the
+SEAMM stack – <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>’s <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code> (which the Tk desktop
+submit dialog’s queue picker and <code class="docutils literal notranslate"><span class="pre">.limits</span></code>-driven override fields read)
+is exactly this kind of consumer.</p>
 </section>
 <section id="not-yet-supported">
 <h3>Not yet supported<a class="headerlink" href="#not-yet-supported" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p>Routing a job to a <em>specific</em> section when a config file has more than
-one (all jobs currently use the <code class="docutils literal notranslate"><span class="pre">[DEFAULT]</span></code> section) – <code class="docutils literal notranslate"><span class="pre">parameters</span>
-<span class="pre">[&quot;slurm&quot;]</span></code> is expected to gain a <code class="docutils literal notranslate"><span class="pre">&quot;section&quot;</span></code> key for this eventually.</p></li>
 <li><p>Per-step SLURM submission (only whole-flowchart submission exists today).</p></li>
 <li><p>A retry cap on stage-out transfer failures for a “no shared filesystem”
 section, separate from <code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code> – today a permanently
@@ -798,6 +843,7 @@ tracking or, worse, resubmitting it as if it had merely gone missing.</p>
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#slurm-submission">SLURM submission</a><ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#enabling-it">Enabling it</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#multiple-queues">Multiple queues</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-happens">What happens</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#no-shared-filesystem">No shared filesystem</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-job-resource-overrides">Per-job resource overrides</a></li>

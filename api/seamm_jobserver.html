@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.8.9 documentation</title>
+    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.8.10 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=7760334a"></script>
+    <script src="../_static/documentation_options.js?v=7ddc0e42"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="seamm_jobserver" href="modules.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.9" />
+  <meta name="docsearch:version" content="2026.8.10" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -532,12 +532,29 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <dt class="sig sig-object py" id="seamm_jobserver.jobserver.JobServer.check_for_finished_jobs">
 <span class="sig-name descname"><span class="pre">check_for_finished_jobs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#JobServer.check_for_finished_jobs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer.check_for_finished_jobs" title="Link to this definition">#</a></dt>
 <dd><p>Check whether jobs have finished.</p>
+<p>Both locally-run and SLURM-submitted jobs may be tracked
+simultaneously now that a single JobServer instance can serve
+multiple queues of different types (a <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> section and
+one or more <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">slurm</span></code> sections at once) – so both passes
+always run, each filtering <code class="docutils literal notranslate"><span class="pre">self._jobs</span></code> down to its own mode.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="seamm_jobserver.jobserver.JobServer.check_for_new_jobs">
 <span class="sig-name descname"><span class="pre">check_for_new_jobs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#JobServer.check_for_new_jobs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer.check_for_new_jobs" title="Link to this definition">#</a></dt>
 <dd><p>Check the database for new jobs that are runnable.</p>
+<p>If this instance has no configured queues at all
+(<code class="docutils literal notranslate"><span class="pre">self._sections</span></code> empty, i.e. no <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code>),
+behavior is exactly what it was before the multi-queue feature
+existed: every submitted job runs immediately as an uncapped local
+subprocess, regardless of any <code class="docutils literal notranslate"><span class="pre">queue</span></code> a job’s <code class="docutils literal notranslate"><span class="pre">parameters</span></code> might
+happen to carry. Otherwise, each submitted job is routed to the
+queue it requested (<code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span></code>), falling back to this
+instance’s default queue if it didn’t request one – an unknown or
+missing-with-no-default queue fails the job immediately rather than
+silently running it somewhere unintended. Each queue has its own
+<code class="docutils literal notranslate"><span class="pre">max_concurrent_jobs</span></code>, checked independently, so one full queue
+never blocks another from accepting new jobs.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -629,16 +646,20 @@ row, and issues the real <code class="docutils literal notranslate"><span class=
 
 <dl class="py method">
 <dt class="sig sig-object py" id="seamm_jobserver.jobserver.JobServer.start_job">
-<span class="sig-name descname"><span class="pre">start_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wdir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmdline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slurm_overrides</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#JobServer.start_job"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer.start_job" title="Link to this definition">#</a></dt>
-<dd><p>Run the given job, locally or via SLURM depending on whether
-this JobServer instance has a SLURM config.</p>
+<span class="sig-name descname"><span class="pre">start_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wdir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmdline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">queue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slurm_overrides</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#JobServer.start_job"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer.start_job" title="Link to this definition">#</a></dt>
+<dd><p>Run the given job, locally or via SLURM depending on the type of
+the queue it’s routed to.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>job_id</strong> (<em>integer</em>) – The id of the job to run.</p></li>
+<li><p><strong>queue</strong> (<em>str</em><em> or </em><em>None</em>) – Which configured section (cluster/queue) to route this job to.
+<code class="docutils literal notranslate"><span class="pre">None</span></code> falls back to this instance’s default queue – see
+<code class="docutils literal notranslate"><span class="pre">_resolve_queue</span></code>. If this instance has no queues configured
+at all, the job always runs as a local subprocess regardless.</p></li>
 <li><p><strong>slurm_overrides</strong> (<em>dict</em><em> or </em><em>None</em>) – A job’s requested per-directive SLURM overrides (its
 <code class="docutils literal notranslate"><span class="pre">parameters[&quot;slurm&quot;]</span></code>), e.g. <code class="docutils literal notranslate"><span class="pre">{&quot;ntasks&quot;:</span> <span class="pre">4,</span> <span class="pre">&quot;mem&quot;:</span> <span class="pre">&quot;40G&quot;}</span></code>.
-Ignored in local mode. Validated against the SLURM section’s
+Ignored for a local-mode job. Validated against the queue’s
 <code class="docutils literal notranslate"><span class="pre">limits</span></code> before use – see <code class="docutils literal notranslate"><span class="pre">SlurmSection.merge_overrides</span></code>.</p></li>
 </ul>
 </dd>

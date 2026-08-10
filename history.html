@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.8.9 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.8.10 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=7760334a"></script>
+    <script src="_static/documentation_options.js?v=7ddc0e42"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Credits" href="authors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.9" />
+  <meta name="docsearch:version" content="2026.8.10" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -506,6 +506,30 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.8.10 – Route jobs to multiple queues/clusters from one JobServer instance</dt><dd><ul class="simple">
+<li><p>A JobServer instance can now be configured with more than one queue
+(cluster/section) in its <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code> and route
+each job to the one it asks for (<code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span></code>), falling
+back to the instance’s default queue if it doesn’t specify one.
+Requesting an unknown queue, or no queue with no default configured,
+fails the job immediately (<code class="docutils literal notranslate"><span class="pre">startup</span> <span class="pre">error</span></code>) rather than silently
+running it somewhere unintended.</p></li>
+<li><p>Each queue’s <code class="docutils literal notranslate"><span class="pre">max_concurrent_jobs</span></code> is enforced independently, so
+one full queue never blocks another from accepting new jobs, and
+SLURM polling is batched per queue so two different clusters’
+same-numbered SLURM job ids are never compared against each other.</p></li>
+<li><p>A <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> queue (see <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>’s <code class="docutils literal notranslate"><span class="pre">2026.8.10</span></code>
+release) and one or more <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">slurm</span></code> queues can now coexist on
+the same JobServer instance – some jobs run as local subprocesses,
+others dispatch to real SLURM clusters, from one process.</p></li>
+<li><p>A SLURM job’s <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> now records which queue it ran on
+and its SLURM job id (found from real usage: nothing previously told
+a user which cluster a finished job had actually run on).</p></li>
+<li><p>No <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code> at all means behavior is
+unchanged from before this feature existed – every job still runs
+as an uncapped local subprocess.</p></li>
+</ul>
+</dd>
 <dt>2026.8.9 – Bugfix: startup reattachment could misapply SLURM staging to a local job</dt><dd><ul class="simple">
 <li><p>On restart, a job’s <code class="docutils literal notranslate"><span class="pre">running</span></code>/<code class="docutils literal notranslate"><span class="pre">kill</span></code> datastore row was reattached
 based on whether the JobServer instance is <em>currently</em>

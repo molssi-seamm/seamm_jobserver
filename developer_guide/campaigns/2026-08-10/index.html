@@ -1,0 +1,1246 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>2026-08-10 – Multi-queue job routing (one Dashboard/JobServer, many clusters) &#8212; SEAMM Jobserver 2026.8.10 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css?v=c224919a" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
+<!-- End Google Tag Manager -->
+
+    <script src="../../../_static/documentation_options.js?v=7ddc0e42"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'developer_guide/campaigns/2026-08-10/index';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="API Documentation" href="../../../api/index.html" />
+    <link rel="prev" title="2026-08-05 – SLURM submission for JobServer" href="../2026-08-05/index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="2026.8.10" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../../_static/SEAMM logo.png" class="logo__image only-light" alt=""/>
+    <img src="../../../_static/SEAMM Inverted 288x181.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">SEAMM JobServer</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../getting_started/index.html">
+    Getting Started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../../index.html">
+    Developer Documentation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api/index.html">
+    API Documentation
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../../../authors.html">
+    Credits
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../../../history.html">
+    History
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://molssi-seamm.github.io">
+    SEAMM Documentation
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://molssi.org">
+    MolSSI
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/molssi-seamm/seamm_jobserver" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://twitter.com/MolSSI_NSF" title="Twitter" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-twitter fa-lg" aria-hidden="true"></i><span class="visually-hidden">Twitter</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../getting_started/index.html">
+    Getting Started
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../../index.html">
+    Developer Documentation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api/index.html">
+    API Documentation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../authors.html">
+    Credits
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../history.html">
+    History
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://molssi-seamm.github.io">
+    SEAMM Documentation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://molssi.org">
+    MolSSI
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/molssi-seamm/seamm_jobserver" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://twitter.com/MolSSI_NSF" title="Twitter" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-twitter fa-lg" aria-hidden="true"></i><span class="visually-hidden">Twitter</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../contributing.html">Contributing</a></li>
+</ul>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../index.html">Campaigns</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../2026-08-05/index.html">2026-08-05 – SLURM submission for JobServer</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">2026-08-10 – Multi-queue job routing (one Dashboard/JobServer, many clusters)</a></li>
+</ul>
+</details></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Developer Documentation</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Campaigns</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">2026-08-10 – Multi-queue job routing (one Dashboard/JobServer, many clusters)</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="multi-queue-job-routing-one-dashboard-jobserver-many-clusters">
+<h1>2026-08-10 – Multi-queue job routing (one Dashboard/JobServer, many clusters)<a class="headerlink" href="#multi-queue-job-routing-one-dashboard-jobserver-many-clusters" title="Link to this heading">#</a></h1>
+<p>Status: Design/requirements discussion with Paul complete. Phase 1
+(<code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>: <code class="docutils literal notranslate"><span class="pre">type=local</span></code> section type + <code class="docutils literal notranslate"><span class="pre">list_sections()</span></code>) done.
+Phase 2 (<code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>: per-job routing across multiple queues) done.
+Phase 3 (<code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>: <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code>) done. Phase 4
+(<code class="docutils literal notranslate"><span class="pre">seamm_dashboard_client</span></code> + <code class="docutils literal notranslate"><span class="pre">seamm/tk_job_handler.py</span></code>: the actual
+user-facing queue picker) done. Phase 5 (real end-to-end validation) done,
+including live redeployment to Paul’s own <code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV</span></code> dev
+JobServer/webui (both restarted, now running this campaign’s code for
+real) with two live queues, <code class="docutils literal notranslate"><span class="pre">local</span></code> and a real <code class="docutils literal notranslate"><span class="pre">molssi10</span></code> SLURM
+queue – both validated with real, independently-<code class="docutils literal notranslate"><span class="pre">sacct</span></code>-confirmed jobs.
+This campaign is the direct continuation of
+<a class="reference external" href="../2026-08-05/index.rst">2026-08-05 – SLURM submission for JobServer</a>: that campaign built the mechanism (a
+<code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code> with one section per cluster/queue target,
+each with its own transport/limits/stager) but deliberately left <strong>per-job
+routing across sections</strong> as “an open question… not needed for initial
+rollout.” This campaign answers that question and wires routing all the way
+through to the actual submission UI.</p>
+<section id="why">
+<h2>Why<a class="headerlink" href="#why" title="Link to this heading">#</a></h2>
+<p>Today one Dashboard + one JobServer, sharing one datastore, can only send
+jobs to whatever single cluster/queue that JobServer instance is configured
+for (local subprocess, or the one SLURM section <code class="docutils literal notranslate"><span class="pre">load_slurm_config()</span></code>
+resolves at startup – see <code class="docutils literal notranslate"><span class="pre">jobserver.py:797</span></code>). That’s a strong
+restriction: a user can’t submit some jobs to their laptop, some to
+TinkerCliffs, some to a lab cluster like “Owl”, from one Dashboard. Paul
+wants a queue concept, selected per job, the way a user would pick “local” /
+“TinkerCliffs” / “Owl” from a dropdown when submitting.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code> campaign already built almost everything needed at the
+config layer – multiple named sections in one ini file, each with its own
+transport (<code class="docutils literal notranslate"><span class="pre">local</span></code>/<code class="docutils literal notranslate"><span class="pre">ssh</span></code>), submission defaults, <code class="docutils literal notranslate"><span class="pre">.limits</span></code>-bounded
+per-job overrides, and (Phase 8) a stager for no-shared-filesystem dispatch.
+What’s missing is: (1) actually dispatching a given job to the section it
+asked for, instead of the one section loaded at startup, and (2) a way for
+a user to ask for a specific queue at all – nothing today surfaces “which
+queues exist” or “.limits” to any submission path.</p>
+</section>
+<section id="where-this-needs-to-land-and-why">
+<h2>Where this needs to land, and why<a class="headerlink" href="#where-this-needs-to-land-and-why" title="Link to this heading">#</a></h2>
+<p>Investigated the real submission path before designing the UI piece, rather
+than assuming <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code> (which has no job-submission page yet). Real
+jobs go through <code class="docutils literal notranslate"><span class="pre">seamm/tk_job_handler.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">TkJobHandler</span></code>, the Tk
+desktop submit dialog: <code class="docutils literal notranslate"><span class="pre">submit_with_dialog()</span></code> builds a dialog with
+Dashboard/Project pickers and a dynamically-built parameters table (one row
+per flowchart control-parameter, reusing <code class="docutils literal notranslate"><span class="pre">sw.LabeledCombobox</span></code>/bounded
+entries/file pickers), then calls
+<code class="docutils literal notranslate"><span class="pre">dashboard.submit(flowchart,</span> <span class="pre">values=value,</span> <span class="pre">**result)</span></code>
+(<code class="docutils literal notranslate"><span class="pre">seamm_dashboard_client.dashboard.Dashboard.submit()</span></code>, which POSTs
+<code class="docutils literal notranslate"><span class="pre">{&quot;cmdline&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;control</span> <span class="pre">parameters&quot;:</span> <span class="pre">...}</span></code> inside <code class="docutils literal notranslate"><span class="pre">parameters</span></code> to
+<code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/jobs</span></code>). This is the actual, current, only submission path in
+regular use – not a Jinja HTML form, not a not-yet-built webui page. So the
+queue picker and <code class="docutils literal notranslate"><span class="pre">.limits</span></code>-driven override widgets have to be added to
+<em>this</em> dialog, not designed only for some future web submission page.</p>
+<p><strong>``seamm_dashboard`` gets no changes at all.</strong> Paul: it’s being phased out
+in favor of <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>, and he’s no longer confident he can cut another
+release of it. This <em>reopens</em> a narrower reading of the <code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code>
+campaign’s “seamm_dashboard won’t get this feature” call (which was about
+not extending its Jinja/HTML submission UI) – here it’s simpler still: no
+new code of any kind in <code class="docutils literal notranslate"><span class="pre">seamm_dashboard</span></code>, full stop. Practical
+consequence: <strong>queue routing is only available for jobs submitted through a
+``seamm_webui``-backed Dashboard.</strong> Any Dashboard still running old
+<code class="docutils literal notranslate"><span class="pre">seamm_dashboard</span></code> has no <code class="docutils literal notranslate"><span class="pre">/api/queues</span></code> endpoint, and
+<code class="docutils literal notranslate"><span class="pre">tk_job_handler.py</span></code> has to treat that as “this dashboard doesn’t offer
+queues” (hide the picker) rather than an error – a mix of upgraded and
+not-yet-upgraded dashboards is the expected state during the
+<code class="docutils literal notranslate"><span class="pre">seamm_dashboard</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code> migration, not an edge case.</p>
+<p>Checked <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>’s existing REST surface before designing against
+it: <code class="docutils literal notranslate"><span class="pre">routers/jobs.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">submit_job</span></code> already accepts an arbitrary
+<code class="docutils literal notranslate"><span class="pre">parameters:</span> <span class="pre">dict</span></code> (<code class="docutils literal notranslate"><span class="pre">SubmitJobModel.parameters</span></code>) and passes it straight
+through to <code class="docutils literal notranslate"><span class="pre">Job.create(...)</span></code> unchanged. So a <code class="docutils literal notranslate"><span class="pre">queue</span></code>/<code class="docutils literal notranslate"><span class="pre">slurm</span></code> key
+riding inside <code class="docutils literal notranslate"><span class="pre">parameters</span></code> needs <strong>zero</strong> submit-side change in
+<code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code> – only a new <em>read</em> endpoint (<code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code> or
+similar, mirroring <code class="docutils literal notranslate"><span class="pre">routers/projects.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">list_projects</span></code>) is needed,
+to advertise which queues exist and their <code class="docutils literal notranslate"><span class="pre">.limits</span></code>. <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>
+already has <code class="docutils literal notranslate"><span class="pre">--root</span></code> wired at startup (<code class="docutils literal notranslate"><span class="pre">main.py:127</span></code>, currently used
+for SSL cert storage), the same <code class="docutils literal notranslate"><span class="pre">root</span></code> <code class="docutils literal notranslate"><span class="pre">seamm_slurm.config</span></code> needs to
+find <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code>.</p>
+</section>
+<section id="guiding-decisions-locked-in">
+<h2>Guiding decisions (locked in)<a class="headerlink" href="#guiding-decisions-locked-in" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>One JobServer instance, multiple ini sections, routed per job</strong> – not
+multiple JobServer processes racing against one shared datastore.
+<code class="docutils literal notranslate"><span class="pre">check_for_new_jobs()</span></code> (<code class="docutils literal notranslate"><span class="pre">jobserver.py:467</span></code>) has <strong>no claiming/locking</strong>
+today (a plain <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">...</span> <span class="pre">WHERE</span> <span class="pre">status</span> <span class="pre">=</span> <span class="pre">'submitted'</span></code>), so concurrent
+JobServer instances polling the same datastore would double-start jobs.
+A single instance with multiple sections sidesteps that problem entirely
+rather than requiring new locking logic. Running a second, independent
+JobServer (e.g. a cluster’s own resident instance, as MolSSI10 and ChemAI
+already do for their own local users) remains a valid, separate
+deployment pattern – just not what this campaign is solving for.</p></li>
+<li><p><strong>``type = local`` becomes a real section type</strong>, alongside the existing
+(and, in practice, only-implemented-so-far) <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">slurm</span></code>. Today
+<code class="docutils literal notranslate"><span class="pre">SlurmSection.type</span></code> is parsed but never branched on –
+<code class="docutils literal notranslate"><span class="pre">build_backend()</span></code>/<code class="docutils literal notranslate"><span class="pre">build_stager()</span></code> unconditionally build SLURM
+objects. A no-scheduler “just run it as a local subprocess” queue becomes
+a normal section in the dispatch table instead of the current
+special-cased “no ini file at all” path – so <code class="docutils literal notranslate"><span class="pre">local</span></code>, <code class="docutils literal notranslate"><span class="pre">tinkercliffs</span></code>,
+and <code class="docutils literal notranslate"><span class="pre">owl</span></code> are uniformly just named sections a job can request.</p></li>
+<li><p><strong>No changes to ``seamm_dashboard``</strong>, per the section above. All new
+server-side code goes in <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>.</p></li>
+<li><p><strong>The Tk desktop dialog (``seamm/tk_job_handler.py``) is the primary UI
+target</strong>, not a web page, per the section above.</p></li>
+<li><p><strong>Reuse everything the ``2026-08-05`` campaign already built</strong>: the
+multi-section ini format, <code class="docutils literal notranslate"><span class="pre">SlurmSection.limits</span></code>/<code class="docutils literal notranslate"><span class="pre">merge_overrides()</span></code>
+(already validates/bounds overrides server-side, already the mechanism
+the webui rewrite plan reserved a <code class="docutils literal notranslate"><span class="pre">parameters[&quot;slurm&quot;]</span></code> slot for), and
+the <code class="docutils literal notranslate"><span class="pre">LocalSlurm</span></code>/<code class="docutils literal notranslate"><span class="pre">SshSlurm</span></code> + <code class="docutils literal notranslate"><span class="pre">LocalStager</span></code>/<code class="docutils literal notranslate"><span class="pre">RsyncStager</span></code> pairing.
+This campaign is routing and surfacing, not rebuilding the SLURM
+integration.</p></li>
+</ul>
+</section>
+<section id="open-questions-not-yet-locked-in-paul-s-call">
+<h2>Open questions (not yet locked in – Paul’s call)<a class="headerlink" href="#open-questions-not-yet-locked-in-paul-s-call" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Field naming.</strong> Recommend a top-level <code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span></code> (e.g.
+<code class="docutils literal notranslate"><span class="pre">&quot;tinkercliffs&quot;</span></code>), scheduler-agnostic since <code class="docutils literal notranslate"><span class="pre">local</span></code> isn’t a SLURM
+concept, with per-job SLURM resource overrides staying in the sibling
+<code class="docutils literal notranslate"><span class="pre">parameters[&quot;slurm&quot;]</span></code> dict the <code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code> campaign already defined
+(<code class="docutils literal notranslate"><span class="pre">{&quot;ntasks&quot;:</span> <span class="pre">4,</span> <span class="pre">&quot;mem&quot;:</span> <span class="pre">&quot;40G&quot;}</span></code>). This is a small deviation from the
+placeholder the <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code> rewrite plan doc sketched
+(<code class="docutils literal notranslate"><span class="pre">parameters[&quot;slurm&quot;][&quot;section&quot;]</span></code>) – that placeholder was written
+before this design existed and explicitly said “not needed yet, just
+don’t let the shape preclude it later,” so nothing currently depends on
+the nested form. Not yet confirmed with Paul.</p></li>
+<li><p><strong>Default queue when a job doesn’t request one.</strong> Proposed: keep today’s
+<code class="docutils literal notranslate"><span class="pre">[DEFAULT]</span> <span class="pre">default</span> <span class="pre">=</span></code> key in <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code> as the
+fallback, same as the single-section case works today.</p></li>
+<li><p><strong>Exact new ``seamm_webui`` route shape</strong> (<code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code> vs. nested
+elsewhere) and how <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code> learns which JobServer <code class="docutils literal notranslate"><span class="pre">--name</span></code> to
+read a config for, if a <code class="docutils literal notranslate"><span class="pre">root</span></code> ever hosts more than one JobServer
+instance (today’s default is the hostname, matching
+<code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>’s own default). Not expected to be a hard problem,
+just not pinned down yet.</p></li>
+</ul>
+</section>
+<section id="architecture">
+<h2>Architecture<a class="headerlink" href="#architecture" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>``seamm_slurm``</strong>: <code class="docutils literal notranslate"><span class="pre">build_backend()</span></code>/<code class="docutils literal notranslate"><span class="pre">build_stager()</span></code>
+(<code class="docutils literal notranslate"><span class="pre">seamm_slurm/config.py</span></code>) gain a real <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">==</span> <span class="pre">&quot;local&quot;</span></code> branch
+(a trivial local-subprocess backend/no-op stager, alongside the existing
+SLURM ones). A new helper to enumerate <em>all</em> sections in a
+<code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code> (not just the one <code class="docutils literal notranslate"><span class="pre">load_slurm_config()</span></code>
+resolves via <code class="docutils literal notranslate"><span class="pre">default=</span></code>), returning name + <code class="docutils literal notranslate"><span class="pre">.limits</span></code> only – safe for
+a lightweight consumer (<code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>, eventually the Tk client
+indirectly) to serialize into an API response without leaking
+<code class="docutils literal notranslate"><span class="pre">host</span></code>/transport secrets.</p></li>
+<li><p><strong>``seamm_jobserver``</strong>: <code class="docutils literal notranslate"><span class="pre">start()</span></code> (<code class="docutils literal notranslate"><span class="pre">jobserver.py:797</span></code>) loads <em>all</em>
+sections into <code class="docutils literal notranslate"><span class="pre">self._slurm</span></code> (a <code class="docutils literal notranslate"><span class="pre">{name:</span> <span class="pre">SlurmSection}</span></code> dict, plus
+per-section built backend/stager) instead of one. <code class="docutils literal notranslate"><span class="pre">check_for_new_jobs()</span></code>
+(<code class="docutils literal notranslate"><span class="pre">jobserver.py:467</span></code>) reads each submitted job’s requested queue,
+validates it against known section names (unknown queue -&gt; <code class="docutils literal notranslate"><span class="pre">startup</span>
+<span class="pre">error</span></code>, reusing the exact error path <code class="docutils literal notranslate"><span class="pre">merge_overrides()</span></code> already
+raises into today), and dispatches to that section. <code class="docutils literal notranslate"><span class="pre">max_concurrent_jobs</span></code>
+and <code class="docutils literal notranslate"><span class="pre">poll_many()</span></code> batching both become per-section rather than
+instance-global. Startup reattachment records/recomputes each tracked
+job’s queue name (not just its <code class="docutils literal notranslate"><span class="pre">slurm_job_id</span></code>) so restart knows which
+backend to poll – same pattern Phase 8 already used for <code class="docutils literal notranslate"><span class="pre">remote_wdir</span></code>.</p></li>
+<li><p><strong>``seamm_webui``</strong>: new <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code>-shaped route (mirrors
+<code class="docutils literal notranslate"><span class="pre">routers/projects.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">list_projects</span></code>), reading
+<code class="docutils literal notranslate"><span class="pre">seamm_slurm.config</span></code>’s new enumerate-sections helper against the
+server’s own <code class="docutils literal notranslate"><span class="pre">--root</span></code>. No change needed to <code class="docutils literal notranslate"><span class="pre">submit_job</span></code> itself –
+<code class="docutils literal notranslate"><span class="pre">parameters</span></code> already passes through untouched.</p></li>
+<li><p><strong>``seamm_dashboard_client``</strong>: new <code class="docutils literal notranslate"><span class="pre">Dashboard.list_queues()</span></code> (mirrors
+<code class="docutils literal notranslate"><span class="pre">list_projects()</span></code>, <code class="docutils literal notranslate"><span class="pre">dashboard.py:175</span></code>), returning <code class="docutils literal notranslate"><span class="pre">[]</span></code>/<code class="docutils literal notranslate"><span class="pre">None</span></code> on a
+404 rather than raising, so callers can treat “no queues” as an ordinary
+case, not an error. <code class="docutils literal notranslate"><span class="pre">Dashboard.submit()</span></code> (<code class="docutils literal notranslate"><span class="pre">dashboard.py:431</span></code>) gains
+<code class="docutils literal notranslate"><span class="pre">queue=</span></code>/<code class="docutils literal notranslate"><span class="pre">slurm_overrides=</span></code> kwargs, written into
+<code class="docutils literal notranslate"><span class="pre">data[&quot;parameters&quot;]</span></code> alongside the existing <code class="docutils literal notranslate"><span class="pre">cmdline</span></code>/<code class="docutils literal notranslate"><span class="pre">control</span>
+<span class="pre">parameters</span></code>.</p></li>
+<li><p><strong>``seamm/tk_job_handler.py``</strong>: a new Queue <code class="docutils literal notranslate"><span class="pre">sw.LabeledCombobox</span></code> in
+<code class="docutils literal notranslate"><span class="pre">create_submit_dialog()</span></code>, next to the existing Dashboard/Project
+pickers, populated in <code class="docutils literal notranslate"><span class="pre">dashboard_cb()</span></code> (<code class="docutils literal notranslate"><span class="pre">tk_job_handler.py:287</span></code>) right
+where projects are already fetched – only shown when
+<code class="docutils literal notranslate"><span class="pre">list_queues()</span></code> returns something. A <code class="docutils literal notranslate"><span class="pre">.limits</span></code>-driven override block
+reuses the exact widget-building pattern <code class="docutils literal notranslate"><span class="pre">submit_with_dialog()</span></code> already
+uses for flowchart control-parameters (<code class="docutils literal notranslate"><span class="pre">ScrolledColumns</span></code>: dropdown for
+<code class="docutils literal notranslate"><span class="pre">.choices</span></code>, bounded entry for <code class="docutils literal notranslate"><span class="pre">.min</span></code>/<code class="docutils literal notranslate"><span class="pre">.max</span></code>, nothing rendered for a
+field absent from <code class="docutils literal notranslate"><span class="pre">overridable</span></code>). <code class="docutils literal notranslate"><span class="pre">handle_dialog()</span></code> folds the chosen
+queue/overrides into <code class="docutils literal notranslate"><span class="pre">result</span></code> alongside <code class="docutils literal notranslate"><span class="pre">project</span></code>/<code class="docutils literal notranslate"><span class="pre">title</span></code>/
+<code class="docutils literal notranslate"><span class="pre">description</span></code>.</p></li>
+</ul>
+</section>
+<section id="phased-plan">
+<h2>Phased plan<a class="headerlink" href="#phased-plan" title="Link to this heading">#</a></h2>
+<section id="phase-1-seamm-slurm-local-section-type-enumeration-done">
+<h3>Phase 1 – <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>: local section type + enumeration (done)<a class="headerlink" href="#phase-1-seamm-slurm-local-section-type-enumeration-done" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">SlurmSection</span></code> gained a <code class="docutils literal notranslate"><span class="pre">type</span></code> field (default <code class="docutils literal notranslate"><span class="pre">&quot;slurm&quot;</span></code>, so every
+existing ini file/section behaves identically unless it opts in). A new
+<code class="docutils literal notranslate"><span class="pre">[section]</span></code> key <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> is recognized and validated at parse
+time (<code class="docutils literal notranslate"><span class="pre">_build_section()</span></code>’s <code class="docutils literal notranslate"><span class="pre">_VALID_TYPES</span></code> check, alongside the existing
+per-section parsing shared by <code class="docutils literal notranslate"><span class="pre">load_slurm_config()</span></code> and the new
+<code class="docutils literal notranslate"><span class="pre">list_sections()</span></code> below) – an unrecognized <code class="docutils literal notranslate"><span class="pre">type</span></code> raises clearly rather
+than silently falling through to SLURM behavior. <code class="docutils literal notranslate"><span class="pre">build_backend()</span></code>/
+<code class="docutils literal notranslate"><span class="pre">build_stager()</span></code> both raise immediately for a <code class="docutils literal notranslate"><span class="pre">type=local</span></code> section
+(rather than building a SLURM object from stray <code class="docutils literal notranslate"><span class="pre">transport</span></code> defaults) –
+by design, a local-type section has no SLURM backend/stager to build at
+all; <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> (Phase 2) routes it through the existing
+local-subprocess path instead, unchanged. New <code class="docutils literal notranslate"><span class="pre">list_sections(root,</span>
+<span class="pre">jobserver_name)</span> <span class="pre">-&gt;</span> <span class="pre">dict[str,</span> <span class="pre">SlurmSection]</span></code> enumerates <em>every</em> section in
+a config file (not just the one <code class="docutils literal notranslate"><span class="pre">default=</span></code>/single-section resolves),
+sharing the same per-section parsing as <code class="docutils literal notranslate"><span class="pre">load_slurm_config()</span></code> via a new
+<code class="docutils literal notranslate"><span class="pre">_build_section()</span></code> helper – returns <code class="docutils literal notranslate"><span class="pre">{}</span></code> if the ini file doesn’t
+exist, mirroring <code class="docutils literal notranslate"><span class="pre">load_slurm_config()</span></code>’s <code class="docutils literal notranslate"><span class="pre">None</span></code>-if-missing convention.
+This is what Phase 2 (per-job routing) and Phase 3 (<code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>’s
+<code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code>) will consume. 8 new tests (103 total in
+<code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>), <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">format</span> <span class="pre">lint</span> <span class="pre">install</span> <span class="pre">test</span></code> clean, installed into
+<code class="docutils literal notranslate"><span class="pre">seamm-dev</span></code>.</p>
+</section>
+<section id="phase-2-seamm-jobserver-per-job-routing-done">
+<h3>Phase 2 – <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>: per-job routing (done)<a class="headerlink" href="#phase-2-seamm-jobserver-per-job-routing-done" title="Link to this heading">#</a></h3>
+<p>New <code class="docutils literal notranslate"><span class="pre">_load_queue_config(root)</span></code> (split out of <code class="docutils literal notranslate"><span class="pre">initialize()</span></code> so it’s
+unit-testable on its own) loads <em>every</em> section via
+<code class="docutils literal notranslate"><span class="pre">seamm_slurm.list_sections()</span></code> into <code class="docutils literal notranslate"><span class="pre">self._sections</span></code> (was: one
+<code class="docutils literal notranslate"><span class="pre">SlurmSection</span></code> via <code class="docutils literal notranslate"><span class="pre">load_slurm_config()</span></code>), builds a backend/stager per
+<code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">slurm</span></code> section into <code class="docutils literal notranslate"><span class="pre">self._backends</span></code>/<code class="docutils literal notranslate"><span class="pre">self._stagers</span></code> (keyed
+by section name; <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> sections get neither), and records
+<code class="docutils literal notranslate"><span class="pre">self._default_queue</span></code> from <code class="docutils literal notranslate"><span class="pre">load_slurm_config()</span></code>’s existing
+<code class="docutils literal notranslate"><span class="pre">default=</span></code>/single-section resolution (unchanged logic, just also kept
+alongside the full section map now).</p>
+<p><code class="docutils literal notranslate"><span class="pre">check_for_new_jobs()</span></code> reads each submitted job’s <code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span></code>,
+falls back to <code class="docutils literal notranslate"><span class="pre">self._default_queue</span></code> if absent, rejects (<code class="docutils literal notranslate"><span class="pre">startup</span>
+<span class="pre">error</span></code>) an unknown queue or a missing queue with no configured default,
+and only then dispatches – per-queue <code class="docutils literal notranslate"><span class="pre">max_concurrent_jobs</span></code> are checked
+independently, so one full queue never blocks another from accepting new
+jobs. A queue’s <code class="docutils literal notranslate"><span class="pre">type</span></code> (not a single instance-wide mode any more)
+decides local-subprocess vs. SLURM dispatch, so a single instance can now
+genuinely run a <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> queue and one or more <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">slurm</span></code>
+queues at the same time – <code class="docutils literal notranslate"><span class="pre">check_for_finished_jobs()</span></code> always runs both
+the local-mode and SLURM-mode polling passes each cycle (filtered by each
+tracked job’s <code class="docutils literal notranslate"><span class="pre">mode</span></code>) rather than choosing one based on instance-wide
+config, and the SLURM pass groups tracked jobs by queue for one batched
+<code class="docutils literal notranslate"><span class="pre">poll_many()</span></code> call per distinct backend, keeping two clusters’ SLURM job
+IDs from ever being compared in the same lookup table (two different
+clusters can coincidentally reuse the same job id number).</p>
+<p>Every tracked job dict gains a <code class="docutils literal notranslate"><span class="pre">&quot;queue&quot;</span></code> key (set explicitly by
+<code class="docutils literal notranslate"><span class="pre">_start_job_slurm</span></code>/<code class="docutils literal notranslate"><span class="pre">_start_job_local</span></code>/reattachment); every place that
+reads it uses a new <code class="docutils literal notranslate"><span class="pre">_resolve_queue(data)</span></code> helper
+(<code class="docutils literal notranslate"><span class="pre">data.get(&quot;queue&quot;)</span> <span class="pre">or</span> <span class="pre">self._default_queue</span></code>) rather than the raw key
+directly – both a genuine safety net for a row that predates this
+campaign (before per-job routing existed, a JobServer instance could only
+ever have had the one section that is now its default) and, as a side
+effect, what let nearly all of the pre-existing single-queue test suite
+(58 tests) keep passing completely unchanged. <code class="docutils literal notranslate"><span class="pre">_start_job_slurm</span></code> now
+persists the resolved <code class="docutils literal notranslate"><span class="pre">queue</span></code> into the datastore row’s <code class="docutils literal notranslate"><span class="pre">parameters</span></code>
+(alongside <code class="docutils literal notranslate"><span class="pre">slurm_job_id</span></code>/<code class="docutils literal notranslate"><span class="pre">resubmit_count</span></code>) for auditability and so a
+restart’s reattachment doesn’t have to guess. <code class="docutils literal notranslate"><span class="pre">_reattach_slurm_jobs</span></code>
+groups candidate rows by resolved queue the same way the finished-jobs
+poll does, and leaves a row whose recorded queue isn’t a currently-
+configured <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">slurm</span></code> queue alone (logged, not guessed at) rather
+than reconciling it against the wrong backend.</p>
+<p>Entirely additive, same guarantee as the 2026-08-05 campaign: no
+<code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code> at all means <code class="docutils literal notranslate"><span class="pre">self._sections</span></code> stays
+empty and <code class="docutils literal notranslate"><span class="pre">check_for_new_jobs()</span></code> takes a dedicated
+<code class="docutils literal notranslate"><span class="pre">_check_for_new_jobs_unmanaged()</span></code> path that is the exact original
+pre-multi-queue code (every submitted job runs immediately as an uncapped
+local subprocess, <code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span></code> ignored entirely if present).</p>
+<p>11 new tests (69 total) covering genuine multi-queue behavior: routing to
+an explicitly-requested queue, falling back to the default, rejecting an
+unknown/missing-with-no-default queue, independent per-queue concurrency
+caps, a <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> queue and <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">slurm</span></code> queues coexisting and
+both being polled in one <code class="docutils literal notranslate"><span class="pre">check_for_finished_jobs()</span></code> cycle, per-queue
+<code class="docutils literal notranslate"><span class="pre">poll_many()</span></code> batching not cross-contaminating two queues’ same-numbered
+SLURM job ids, reattachment routing by each row’s own recorded queue, an
+unroutable recorded queue being left alone rather than guessed at, and
+<code class="docutils literal notranslate"><span class="pre">_load_queue_config()</span></code> itself against a real two-section (one
+<code class="docutils literal notranslate"><span class="pre">type=local</span></code>, one <code class="docutils literal notranslate"><span class="pre">type=slurm</span></code>) ini file. <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">format</span> <span class="pre">lint</span> <span class="pre">install</span>
+<span class="pre">test</span></code> clean. Not yet committed/released.</p>
+</section>
+<section id="phase-3-seamm-webui-get-api-queues-done">
+<h3>Phase 3 – <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>: <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code> (done)<a class="headerlink" href="#phase-3-seamm-webui-get-api-queues-done" title="Link to this heading">#</a></h3>
+<p>Confirmed before writing any code that <code class="docutils literal notranslate"><span class="pre">routers/jobs.py</span></code>’s
+<code class="docutils literal notranslate"><span class="pre">submit_job</span></code> already accepts an arbitrary <code class="docutils literal notranslate"><span class="pre">parameters:</span> <span class="pre">dict</span></code> passed
+straight through to <code class="docutils literal notranslate"><span class="pre">Job.create()</span></code> – so no submission-side change was
+needed at all, only the new read endpoint.</p>
+<p>New <code class="docutils literal notranslate"><span class="pre">seamm_webui/queue_config.py</span></code> (mirrors <code class="docutils literal notranslate"><span class="pre">db.py</span></code>’s pattern: a small
+module holding process-wide state set once at startup, read by a router)
+holds <code class="docutils literal notranslate"><span class="pre">root</span></code>/<code class="docutils literal notranslate"><span class="pre">jobserver_name</span></code>, configured by <code class="docutils literal notranslate"><span class="pre">main.py</span></code>’s
+<code class="docutils literal notranslate"><span class="pre">create_app()</span></code> – which gained two new optional parameters,
+<code class="docutils literal notranslate"><span class="pre">root:</span> <span class="pre">Optional[str]</span> <span class="pre">=</span> <span class="pre">None</span></code> and <code class="docutils literal notranslate"><span class="pre">jobserver_name:</span> <span class="pre">Optional[str]</span> <span class="pre">=</span>
+<span class="pre">None</span></code>, both defaulting to “don’t know,” so every pre-existing caller/test
+(none of which pass them) is unaffected: the new endpoint just reports no
+queues. <code class="docutils literal notranslate"><span class="pre">root</span></code> is the same <code class="docutils literal notranslate"><span class="pre">--root</span></code> config directory
+<code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;jobserver-name&gt;.ini</span></code> already lives in for
+<code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>/<code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code> – <strong>not</strong> <code class="docutils literal notranslate"><span class="pre">create_app()</span></code>’s
+<code class="docutils literal notranslate"><span class="pre">datastore_dir</span></code>, mirroring the pre-existing <code class="docutils literal notranslate"><span class="pre">--root</span></code> vs <code class="docutils literal notranslate"><span class="pre">--datastore</span></code>
+distinction <code class="docutils literal notranslate"><span class="pre">db.py</span></code> already documents (a real bug during that package’s
+own scaffolding). <code class="docutils literal notranslate"><span class="pre">run()</span></code> gained a new <code class="docutils literal notranslate"><span class="pre">--jobserver-name</span></code> CLI flag
+(default: this host’s hostname, matching <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>’s own
+<code class="docutils literal notranslate"><span class="pre">--name</span></code> default) for the case where a host runs more than one
+independent JobServer instance and the pairing needs to be explicit.</p>
+<p>New <code class="docutils literal notranslate"><span class="pre">seamm_webui/routers/queues.py</span></code>: <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code> (mirrors
+<code class="docutils literal notranslate"><span class="pre">routers/projects.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">list_projects</span></code> – same <code class="docutils literal notranslate"><span class="pre">require_permission</span>
+<span class="pre">(&quot;read&quot;)</span></code> gating, since by the time a client would call this it’s already
+authenticated the same way <code class="docutils literal notranslate"><span class="pre">list_projects</span></code> requires). Calls
+<code class="docutils literal notranslate"><span class="pre">seamm_slurm.config.list_sections()</span></code> against the configured
+<code class="docutils literal notranslate"><span class="pre">root</span></code>/<code class="docutils literal notranslate"><span class="pre">jobserver_name</span></code>; for each section returns <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">type</span></code>,
+<code class="docutils literal notranslate"><span class="pre">default</span></code> (whether <code class="docutils literal notranslate"><span class="pre">load_slurm_config()</span></code>’s own
+<code class="docutils literal notranslate"><span class="pre">default=</span></code>/single-section resolution picked it), and <code class="docutils literal notranslate"><span class="pre">limits</span></code>
+(<code class="docutils literal notranslate"><span class="pre">FieldLimits.choices</span></code>/<code class="docutils literal notranslate"><span class="pre">minimum</span></code>/<code class="docutils literal notranslate"><span class="pre">maximum</span></code>, serialized as-is) –
+<strong>never</strong> <code class="docutils literal notranslate"><span class="pre">transport</span></code>/<code class="docutils literal notranslate"><span class="pre">host</span></code>/<code class="docutils literal notranslate"><span class="pre">remote_root</span></code>/<code class="docutils literal notranslate"><span class="pre">remote_conda_env</span></code>, all
+of which are this host’s own system/machine config, not something a
+submitting client needs or should see. An ambiguous config (multiple
+sections, no <code class="docutils literal notranslate"><span class="pre">[DEFAULT]</span> <span class="pre">default=</span></code>) – which crashes <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>
+itself at startup by design – is caught here and degrades to “no queue
+marked default” rather than 500ing the whole listing, since this is a
+read-only status endpoint, not the enforcement point (the JobServer
+re-validates every request server-side regardless of what any client
+believes the queues/limits are, unchanged from Phase 6 of the 2026-08-05
+campaign).</p>
+<p>Added <code class="docutils literal notranslate"><span class="pre">seamm-slurm</span></code> to <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>’s <code class="docutils literal notranslate"><span class="pre">dependencies</span></code>.</p>
+<p>Note found and confirmed <strong>not</strong> to be a regression: the existing
+<code class="docutils literal notranslate"><span class="pre">tests/test_auth.py::test_new_local_account_can_log_in</span></code> fails on a clean
+<code class="docutils literal notranslate"><span class="pre">dev</span></code> checkout too (an unrelated <code class="docutils literal notranslate"><span class="pre">IntegrityError</span></code> in
+<code class="docutils literal notranslate"><span class="pre">seamm_datastore</span></code>’s role-assignment code, reproduced via a
+<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">stash</span></code>/<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">stash</span> <span class="pre">pop</span></code> round-trip before writing any Phase 3
+code) – not touched or investigated further here, out of scope for this
+campaign.</p>
+<p>6 new tests (<code class="docutils literal notranslate"><span class="pre">tests/test_queues.py</span></code>): no-<code class="docutils literal notranslate"><span class="pre">root</span></code>/no-ini-file both
+return <code class="docutils literal notranslate"><span class="pre">[]</span></code>, real two-section (one <code class="docutils literal notranslate"><span class="pre">type=local</span></code>, one <code class="docutils literal notranslate"><span class="pre">type=slurm</span></code>
+with <code class="docutils literal notranslate"><span class="pre">.limits</span></code>) listing including the resolved default, host/transport/
+remote_* never present in the response, <code class="docutils literal notranslate"><span class="pre">--jobserver-name</span></code> defaulting to
+hostname, and the ambiguous-default case not crashing. <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">format</span>
+<span class="pre">lint</span></code> clean; full suite 24 passed / 1 pre-existing failure (unrelated,
+see above).</p>
+</section>
+<section id="phase-4-seamm-dashboard-client-seamm-tk-job-handler-py-the-user-facing-ui-done">
+<h3>Phase 4 – <code class="docutils literal notranslate"><span class="pre">seamm_dashboard_client</span></code> + <code class="docutils literal notranslate"><span class="pre">seamm/tk_job_handler.py</span></code>: the user-facing UI (done)<a class="headerlink" href="#phase-4-seamm-dashboard-client-seamm-tk-job-handler-py-the-user-facing-ui-done" title="Link to this heading">#</a></h3>
+<p><strong>Addendum to Phase 3, discovered while building its actual consumer</strong>:
+the <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code> payload gained a <code class="docutils literal notranslate"><span class="pre">&quot;current&quot;</span></code> value per
+overridable field (<code class="docutils literal notranslate"><span class="pre">routers/queues.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">_serialize_limits()</span></code>, now
+also takes the queue’s <code class="docutils literal notranslate"><span class="pre">directives</span></code>) – a queue’s own site-default
+directive value (e.g. <code class="docutils literal notranslate"><span class="pre">ntasks</span></code>’s current <code class="docutils literal notranslate"><span class="pre">1</span></code>), not a secret, and
+needed so the override UI can show what’s actually being overridden
+(“current: 1, choose up to 6”) instead of an unexplained blank field.
+Updated <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>’s tests to match.</p>
+<p><code class="docutils literal notranslate"><span class="pre">seamm_dashboard_client.Dashboard</span></code> gained <code class="docutils literal notranslate"><span class="pre">list_queues()</span></code> (mirrors
+<code class="docutils literal notranslate"><span class="pre">list_projects()</span></code>’s shape, hitting <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code> – only
+<code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code> implements this, so a non-200 response, including a plain
+404 from an old <code class="docutils literal notranslate"><span class="pre">seamm_dashboard</span></code>, is logged at <code class="docutils literal notranslate"><span class="pre">debug</span></code> and treated as
+“no queues,” not an error) and <code class="docutils literal notranslate"><span class="pre">submit()</span></code> gained <code class="docutils literal notranslate"><span class="pre">queue=</span></code>/
+<code class="docutils literal notranslate"><span class="pre">slurm_overrides=</span></code> keyword arguments, folded into
+<code class="docutils literal notranslate"><span class="pre">data[&quot;parameters&quot;][&quot;queue&quot;]</span></code>/<code class="docutils literal notranslate"><span class="pre">[&quot;slurm&quot;]</span></code> only when given (omitted
+entirely otherwise, so an un-updated caller’s POST body is byte-identical
+to before). 5 new tests (<code class="docutils literal notranslate"><span class="pre">responses</span></code>-mocked HTTP, including a fake
+minimal flowchart object exercising <code class="docutils literal notranslate"><span class="pre">submit()</span></code> without needing a real
+<code class="docutils literal notranslate"><span class="pre">seamm.Flowchart</span></code>) – 10 total, <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">format</span> <span class="pre">lint</span> <span class="pre">install</span> <span class="pre">test</span></code> clean.</p>
+<p><code class="docutils literal notranslate"><span class="pre">seamm/tk_job_handler.py</span></code> (the actual, only-in-real-use submission
+dialog): new Queue <code class="docutils literal notranslate"><span class="pre">sw.LabeledCombobox</span></code> between Project and Title,
+populated by a new <code class="docutils literal notranslate"><span class="pre">update_queues()</span></code> (called from <code class="docutils literal notranslate"><span class="pre">dashboard_cb()</span></code>,
+the same place projects are already fetched) – hidden entirely
+(<code class="docutils literal notranslate"><span class="pre">grid_forget()</span></code>, per CLAUDE.md’s “hide, don’t disable” GUI principle)
+when the current dashboard has no queues at all, defaulting to whichever
+queue <code class="docutils literal notranslate"><span class="pre">list_queues()</span></code> marks <code class="docutils literal notranslate"><span class="pre">&quot;default&quot;</span></code> otherwise. A new
+<code class="docutils literal notranslate"><span class="pre">.limits</span></code>-driven “Queue options” table (<code class="docutils literal notranslate"><span class="pre">build_queue_overrides()</span></code>,
+rebuilt on every queue-selection change via a new <code class="docutils literal notranslate"><span class="pre">queue_cb()</span></code>) renders
+a readonly dropdown for a field with <code class="docutils literal notranslate"><span class="pre">choices</span></code>, a plain entry otherwise,
+with the field’s current site default and min/max shown as a hint in the
+Description column – reuses the dialog’s existing
+<code class="docutils literal notranslate"><span class="pre">ScrolledColumns</span></code>-table idiom (the same one already used for flowchart
+control-parameters), not a new widget pattern. A field left blank means
+“don’t override it,” mirroring the ini file’s own “blank means don’t pass
+that directive” convention (<code class="docutils literal notranslate"><span class="pre">get_queue_overrides()</span></code>). <code class="docutils literal notranslate"><span class="pre">handle_dialog()</span></code>
+and <code class="docutils literal notranslate"><span class="pre">submit_with_dialog()</span></code> thread the chosen queue and overrides through
+to <code class="docutils literal notranslate"><span class="pre">Dashboard.submit()</span></code> alongside the pre-existing
+project/title/description. Dialog rows renumbered throughout to make room
+(0 dashboard, 1 project, 2 queue, 3 title, 4-5 description, 6 reset
+buttons, 7-8 queue overrides, 9-10 flowchart parameters) – both new
+sections are gridded/forgotten dynamically, matching how the flowchart
+parameters section already worked, not statically placed.</p>
+<p>This module had <strong>zero pre-existing automated tests</strong> (a Tk GUI, not
+previously covered) and no browser-automation-equivalent tool exists for a
+native Tk app in this environment, so real coverage came from a manual,
+scripted smoke test instead of a checked-in test suite: created a real
+(headless, <code class="docutils literal notranslate"><span class="pre">root.withdraw()</span></code>’d) <code class="docutils literal notranslate"><span class="pre">Tk()</span></code> root, built the dialog, and
+drove <code class="docutils literal notranslate"><span class="pre">update_queues()</span></code>/<code class="docutils literal notranslate"><span class="pre">build_queue_overrides()</span></code>/
+<code class="docutils literal notranslate"><span class="pre">get_queue_overrides()</span></code> against fake dashboard objects returning
+multi-queue, single-queue-with-no-limits, and zero-queue responses –
+confirmed the picker populates/defaults/hides correctly, the overrides
+table rebuilds correctly on queue-switch, and a filled-in override is read
+back correctly. Re-run clean after <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">install</span></code>. <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">format</span> <span class="pre">lint</span></code>
+clean (28 files unchanged/reformatted); <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">tests/</span></code> (22 pre-existing,
+unrelated tests) still green.</p>
+</section>
+<section id="phase-5-validation-local-two-queue-done-remote-slurm-queue-not-started">
+<h3>Phase 5 – validation (local two-queue done; remote SLURM queue not started)<a class="headerlink" href="#phase-5-validation-local-two-queue-done-remote-slurm-queue-not-started" title="Link to this heading">#</a></h3>
+<p><strong>Local two-queue validation (done).</strong> A fully isolated throwaway setup
+(matching the <code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code> campaign’s own discipline for real-system
+tests), entirely under the session scratchpad, never touching any of
+Paul’s real <code class="docutils literal notranslate"><span class="pre">~/SEAMM</span></code>/<code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV</span></code> roots or their live
+<code class="docutils literal notranslate"><span class="pre">seamm-jobserver</span></code>/<code class="docutils literal notranslate"><span class="pre">seamm-webui</span></code> processes (explicitly confirmed still
+running, untouched, after this test’s own instances were stopped):</p>
+<ul class="simple">
+<li><p>A throwaway <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;</span></code> with a fresh datastore and a
+<code class="docutils literal notranslate"><span class="pre">phase5test.ini</span></code> defining two <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> queues, <code class="docutils literal notranslate"><span class="pre">fast</span></code>
+(<code class="docutils literal notranslate"><span class="pre">max_concurrent_jobs</span> <span class="pre">=</span> <span class="pre">5</span></code>, the <code class="docutils literal notranslate"><span class="pre">[DEFAULT]</span> <span class="pre">default</span></code>) and <code class="docutils literal notranslate"><span class="pre">slow</span></code>
+(<code class="docutils literal notranslate"><span class="pre">max_concurrent_jobs</span> <span class="pre">=</span> <span class="pre">1</span></code>).</p></li>
+<li><p>A real <code class="docutils literal notranslate"><span class="pre">seamm-webui</span></code> process (<code class="docutils literal notranslate"><span class="pre">--root</span></code>/<code class="docutils literal notranslate"><span class="pre">--datastore</span></code> pointed at
+the throwaway tree, <code class="docutils literal notranslate"><span class="pre">--jobserver-name</span> <span class="pre">phase5test</span></code>, <code class="docutils literal notranslate"><span class="pre">--auth</span> <span class="pre">none</span></code>,
+loopback) – confirmed for real that <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code> returns both
+queues, correctly marking <code class="docutils literal notranslate"><span class="pre">fast</span></code> as the default, straight from the
+real ini file through the real HTTP stack.</p></li>
+<li><p>A real <code class="docutils literal notranslate"><span class="pre">seamm-jobserver</span></code> process against the same throwaway root/
+datastore – its startup log confirmed <code class="docutils literal notranslate"><span class="pre">_load_queue_config()</span></code> really
+discovering both queues (“Configured queues: [‘fast’, ‘slow’]
+(default=’fast’)”).</p></li>
+<li><p>A real, unmocked <code class="docutils literal notranslate"><span class="pre">seamm_dashboard_client.Dashboard</span></code> (no
+username/password – exercises the exact “none”-auth, no-token
+<code class="docutils literal notranslate"><span class="pre">login()</span></code> short-circuit a loopback Tk-client session would use)
+submitting two real jobs, one per queue, using a real
+<code class="docutils literal notranslate"><span class="pre">seamm.Flowchart</span></code> (<code class="docutils literal notranslate"><span class="pre">StartNode</span> <span class="pre">-&gt;</span> <span class="pre">FromSMILESStep</span></code>, built via the
+<code class="docutils literal notranslate"><span class="pre">seamm</span></code> API rather than a hand-authored <code class="docutils literal notranslate"><span class="pre">.flow</span></code> file – mirrors the
+<code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code> campaign’s own Phase 8 validation, and deliberately
+avoids the <code class="docutils literal notranslate"><span class="pre">seamm_datastore</span></code>-bundled sample flowchart, whose DFTB+
+step failed with an unrelated, pre-existing <code class="docutils literal notranslate"><span class="pre">dftbplus_step</span></code>
+version-skew bug (an unrecognized stored optimization-method string) –
+confirmed via that job’s real traceback, nothing to do with routing,
+not investigated further as out of scope here).</p></li>
+<li><p><strong>Confirmed, from the real datastore, not inference</strong>: both jobs ran as
+genuine local subprocesses, finished successfully, and each job’s own
+<code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span></code> in the database matches exactly the queue it was
+submitted to (job 3 -&gt; <code class="docutils literal notranslate"><span class="pre">fast</span></code>, job 4 -&gt; <code class="docutils literal notranslate"><span class="pre">slow</span></code>) – the core guarantee
+this phase set out to prove, for real, end to end, through every layer
+built in Phases 1-4.</p></li>
+</ul>
+<p><strong>Live redeployment to ``~/SEAMM_DEV`` + real MolSSI10 validation (done,
+2026-08-10, Paul’s explicit go-ahead: “Fine to update both the local DEV
+server and MolSSI10 – that way both you and I can test both”).</strong></p>
+<p>A real, independent (and unrelated to this campaign) bug was found while
+setting this up: <code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV</span></code>’s launchd-managed JobServer
+(<code class="docutils literal notranslate"><span class="pre">org.molssi.seamm.dev_jobserver</span></code>, no <code class="docutils literal notranslate"><span class="pre">--name</span></code> in its plist, so it
+defaults to <code class="docutils literal notranslate"><span class="pre">socket.gethostname()</span></code>) had been silently running in plain
+local-subprocess mode this entire time – <code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV/Mac.ini</span></code> (written
+during the <code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code> campaign’s Phase 8, “–name Mac, the hostname”)
+was orphaned at some point after this Mac’s hostname changed to
+<code class="docutils literal notranslate"><span class="pre">PaulsPersonal.local</span></code>, so no ini file ever matched and the SLURM/
+ssh-transport dispatch it documented as “validated working” and “ready
+for real dev use” had not actually been in effect. Confirmed via
+<code class="docutils literal notranslate"><span class="pre">hostname</span></code>/<code class="docutils literal notranslate"><span class="pre">socket.gethostname()</span></code> both reporting
+<code class="docutils literal notranslate"><span class="pre">PaulsPersonal.local</span></code>, and empty/stale <code class="docutils literal notranslate"><span class="pre">jobserver.log</span></code>/
+<code class="docutils literal notranslate"><span class="pre">jobserver_status.json</span></code> showing no SLURM activity. Fixed by adding a
+new <code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV/PaulsPersonal.local.ini</span></code> (<code class="docutils literal notranslate"><span class="pre">Mac.ini</span></code> left in place,
+unused, for history) with the same <code class="docutils literal notranslate"><span class="pre">[molssi10]</span></code> section plus a new
+<code class="docutils literal notranslate"><span class="pre">[local]</span></code> (<code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code>) queue – <code class="docutils literal notranslate"><span class="pre">default</span> <span class="pre">=</span> <span class="pre">molssi10</span></code> kept
+unchanged, so this is purely additive.</p>
+<p>Deployment steps, each checked before acting (mirroring the
+<code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code> campaign’s own discipline for touching real systems):</p>
+<ul class="simple">
+<li><p>Confirmed <code class="docutils literal notranslate"><span class="pre">squeue</span> <span class="pre">-u</span> <span class="pre">psaxe</span></code> on molssi10 was empty, both before and
+immediately before submitting.</p></li>
+<li><p>Confirmed the <code class="docutils literal notranslate"><span class="pre">seamm-dev</span></code> conda env (what
+<code class="docutils literal notranslate"><span class="pre">org.molssi.seamm.dev_jobserver</span></code> actually runs from) already had this
+campaign’s Phases 1-2 code installed and identical to the working tree
+(<code class="docutils literal notranslate"><span class="pre">diff</span></code> against the installed <code class="docutils literal notranslate"><span class="pre">jobserver.py</span></code>) – no reinstall
+needed there, only a restart.</p></li>
+<li><p>Found the separate, <strong>not</strong> launchd-managed <code class="docutils literal notranslate"><span class="pre">seamm-webui</span></code> process
+Paul had already been running by hand on port 8010 was (a) missing
+<code class="docutils literal notranslate"><span class="pre">--root</span></code> entirely (defaulting to <code class="docutils literal notranslate"><span class="pre">~/SEAMM</span></code>, the wrong root for
+finding <code class="docutils literal notranslate"><span class="pre">PaulsPersonal.local.ini</span></code>) and (b) running a stale
+<code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>/<code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code> install in its own <code class="docutils literal notranslate"><span class="pre">.venv</span></code> predating
+this campaign entirely (confirmed via <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">show</span></code>/<code class="docutils literal notranslate"><span class="pre">diff</span></code> against
+<code class="docutils literal notranslate"><span class="pre">main.py</span></code>) – its own <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">.</span></code> had even pulled a <em>released</em>
+<code class="docutils literal notranslate"><span class="pre">seamm-slurm</span></code> from PyPI as a transitive dependency, silently
+overwriting the dev install with a version lacking <code class="docutils literal notranslate"><span class="pre">list_sections()</span></code>/
+<code class="docutils literal notranslate"><span class="pre">type=local</span></code> entirely. Fixed: reinstalled this checkout’s
+<code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code> <em>and</em> <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code> into that <code class="docutils literal notranslate"><span class="pre">.venv</span></code>, then
+relaunched with <code class="docutils literal notranslate"><span class="pre">--root</span> <span class="pre">~/SEAMM_DEV</span> <span class="pre">--datastore</span> <span class="pre">~/SEAMM_DEV/Jobs</span>
+<span class="pre">--port</span> <span class="pre">8010</span></code> (unchanged otherwise).</p></li>
+<li><p>Restarted <code class="docutils literal notranslate"><span class="pre">org.molssi.seamm.dev_jobserver</span></code> via <code class="docutils literal notranslate"><span class="pre">launchctl</span> <span class="pre">kickstart</span>
+<span class="pre">-k</span> <span class="pre">gui/&lt;uid&gt;/...</span></code> (matching the <code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code> campaign’s exact
+precedent for this launchd-managed process) – not a manual kill/relaunch.</p></li>
+<li><p><strong>Left completely untouched</strong>: MolSSI10’s own resident
+JobServer/Dashboard (no code changes needed there at all – ssh-transport
+dispatch only requires a working <code class="docutils literal notranslate"><span class="pre">run_from_jobserver</span></code> on the remote
+end, which already existed; all the new routing logic runs entirely on
+the dispatching side), the old <code class="docutils literal notranslate"><span class="pre">seamm-dashboard</span></code> Flask app still
+running as <code class="docutils literal notranslate"><span class="pre">org.molssi.seamm.dev_dashboard</span></code> on port 55066 (per the
+standing “no changes to seamm_dashboard” decision), and Paul’s
+production (non-dev) <code class="docutils literal notranslate"><span class="pre">~/SEAMM</span></code> JobServer/Dashboard.</p></li>
+</ul>
+<p><strong>Real submission results</strong>, via <code class="docutils literal notranslate"><span class="pre">Dashboard</span></code> (no credentials) against
+the now-restarted <code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:8010</span></code>, one <code class="docutils literal notranslate"><span class="pre">FromSMILESStep</span></code> job
+per queue:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">queue=local</span></code> -&gt; job 3885, finished, <code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span> <span class="pre">==</span>
+<span class="pre">&quot;local&quot;</span></code>, no <code class="docutils literal notranslate"><span class="pre">slurm_job_id</span></code> (ran as a genuine local subprocess).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">queue=molssi10</span></code> -&gt; job 3886, finished, <code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span> <span class="pre">==</span>
+<span class="pre">&quot;molssi10&quot;</span></code>, real <code class="docutils literal notranslate"><span class="pre">slurm_job_id</span> <span class="pre">=</span> <span class="pre">28</span></code>. <strong>Independently confirmed via
+``sacct -j 28`` on molssi10 itself</strong> (not just trusting the local
+datastore): <code class="docutils literal notranslate"><span class="pre">28|seamm-3886|COMPLETED|0:0</span></code>.</p></li>
+<li><p>Cleaned up only this test’s own remote scratch directory
+(<code class="docutils literal notranslate"><span class="pre">/home/psaxe/seamm_dev_remote_jobs/Job_003886</span></code>) afterward, leaving
+Paul’s pre-existing <code class="docutils literal notranslate"><span class="pre">Job_003882</span></code>/<code class="docutils literal notranslate"><span class="pre">Job_003883</span></code> there untouched. Left
+the two local datastore job rows in place (harmless, clearly titled
+“phase5 dev-server validation (…)”) as a visible record Paul can see
+directly when he goes to test this himself.</p></li>
+</ul>
+</section>
+</section>
+<section id="status-log">
+<h2>Status log<a class="headerlink" href="#status-log" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>2026-08-10</strong> – Requirements/architecture discussion with Paul.
+Reviewed the <code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code> campaign’s existing multi-section ini design
+and confirmed it was never wired up for per-job routing (single section
+loaded at startup, no claiming/locking in <code class="docutils literal notranslate"><span class="pre">check_for_new_jobs()</span></code>).
+Traced the real job-submission path (<code class="docutils literal notranslate"><span class="pre">seamm/tk_job_handler.py</span></code> -&gt;
+<code class="docutils literal notranslate"><span class="pre">seamm_dashboard_client</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/jobs</span></code> on whatever Dashboard is
+configured) rather than assuming a web submission page. Locked in:
+single JobServer instance with multi-section per-job routing (not
+multiple racing instances), <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> as a real section type, and
+– after Paul clarified <code class="docutils literal notranslate"><span class="pre">seamm_dashboard</span></code> is being phased out for
+<code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code> and may not be releasable again – <strong>no changes to
+``seamm_dashboard`` at all</strong>, narrower than the <code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code> campaign’s
+original “no Jinja UI” reading. Confirmed <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>’s
+<code class="docutils literal notranslate"><span class="pre">submit_job</span></code> already passes <code class="docutils literal notranslate"><span class="pre">parameters</span></code> through untouched, so only a
+new read endpoint is needed there. Field naming
+(<code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span></code> vs. the webui rewrite plan’s earlier
+<code class="docutils literal notranslate"><span class="pre">parameters[&quot;slurm&quot;][&quot;section&quot;]</span></code> placeholder) and the default-queue
+fallback left as open questions for Paul, not yet confirmed. Plan
+written; implementation not started.</p></li>
+<li><p><strong>2026-08-10 (Phase 1)</strong> – Built the <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code> side: <code class="docutils literal notranslate"><span class="pre">type</span></code> field
+on <code class="docutils literal notranslate"><span class="pre">SlurmSection</span></code> (default <code class="docutils literal notranslate"><span class="pre">&quot;slurm&quot;</span></code>, fully backward compatible),
+<code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> recognized/validated at parse time,
+<code class="docutils literal notranslate"><span class="pre">build_backend()</span></code>/<code class="docutils literal notranslate"><span class="pre">build_stager()</span></code> raise clearly for a <code class="docutils literal notranslate"><span class="pre">type=local</span></code>
+section instead of building a stray SLURM object, and a new
+<code class="docutils literal notranslate"><span class="pre">list_sections()</span></code> enumerating every section in a config file (not just
+the resolved default one) for the routing/UI work still to come. 8 new
+tests (103 total), <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">format</span> <span class="pre">lint</span> <span class="pre">install</span> <span class="pre">test</span></code> clean. Not yet
+committed/released – installed into <code class="docutils literal notranslate"><span class="pre">seamm-dev</span></code> only. Phases 2-5 not
+started.</p></li>
+<li><p><strong>2026-08-10 (Phase 2)</strong> – Built the <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> side: multi-
+section loading (<code class="docutils literal notranslate"><span class="pre">_load_queue_config()</span></code>), per-job <code class="docutils literal notranslate"><span class="pre">queue</span></code> resolution
+and validation in <code class="docutils literal notranslate"><span class="pre">check_for_new_jobs()</span></code>, per-queue concurrency caps
+and <code class="docutils literal notranslate"><span class="pre">poll_many()</span></code> batching, a <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> queue and <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span>
+<span class="pre">slurm</span></code> queues able to coexist on one instance, and reattachment routing
+by each row’s own recorded queue. Preserved the “no ini file -&gt; zero
+behavior change” guarantee via a dedicated
+<code class="docutils literal notranslate"><span class="pre">_check_for_new_jobs_unmanaged()</span></code> path, and a <code class="docutils literal notranslate"><span class="pre">_resolve_queue()</span></code>
+fallback-to-default helper that both handles genuinely pre-existing rows
+and kept the entire prior single-queue test suite passing unmodified. 11
+new tests (69 total), <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">format</span> <span class="pre">lint</span> <span class="pre">install</span> <span class="pre">test</span></code> clean. Not yet
+committed/released – installed into <code class="docutils literal notranslate"><span class="pre">seamm-dev</span></code> only. Phases 3-5 not
+started.</p></li>
+<li><p><strong>2026-08-10 (Phase 3)</strong> – Built the <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code> side: confirmed its
+job-submission route already passes <code class="docutils literal notranslate"><span class="pre">parameters</span></code> through untouched, so
+only a new read endpoint was needed. New <code class="docutils literal notranslate"><span class="pre">queue_config.py</span></code> +
+<code class="docutils literal notranslate"><span class="pre">routers/queues.py</span></code> (<code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code>), two new optional
+<code class="docutils literal notranslate"><span class="pre">create_app()</span></code> parameters (<code class="docutils literal notranslate"><span class="pre">root</span></code>/<code class="docutils literal notranslate"><span class="pre">jobserver_name</span></code>, both
+backward-compatible no-ops when omitted), a new <code class="docutils literal notranslate"><span class="pre">--jobserver-name</span></code> CLI
+flag, and <code class="docutils literal notranslate"><span class="pre">seamm-slurm</span></code> added as a dependency. Found (and confirmed,
+not caused) a pre-existing unrelated test failure via a
+stash/stash-pop round-trip against a clean checkout. 6 new tests, <code class="docutils literal notranslate"><span class="pre">make</span>
+<span class="pre">format</span> <span class="pre">lint</span></code> clean. Not yet committed/released. Phases 4-5 not started.</p></li>
+<li><p><strong>2026-08-10 (Phase 4)</strong> – Built the user-facing piece: a small
+<code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code> addendum (a <code class="docutils literal notranslate"><span class="pre">&quot;current&quot;</span></code> value per overridable field,
+needed once actually building the UI that consumes it), then
+<code class="docutils literal notranslate"><span class="pre">seamm_dashboard_client.Dashboard.list_queues()</span></code>/<code class="docutils literal notranslate"><span class="pre">submit()</span></code> (10
+tests total), then <code class="docutils literal notranslate"><span class="pre">seamm/tk_job_handler.py</span></code>’s queue picker +
+<code class="docutils literal notranslate"><span class="pre">.limits</span></code>-driven override table (dialog rows renumbered to fit). This
+module had no pre-existing tests and no equivalent to browser automation
+exists for a native Tk app here, so validated via a manual headless-Tk
+smoke script instead (multi-queue, no-limits, and zero-queue cases all
+confirmed correct) rather than a checked-in suite. <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">format</span> <span class="pre">lint</span>
+<span class="pre">install</span> <span class="pre">test</span></code> clean in all three packages (22 pre-existing <code class="docutils literal notranslate"><span class="pre">seamm</span></code>
+tests unaffected). Not yet committed/released. Phase 5 not started.</p></li>
+<li><p><strong>2026-08-10 (Phase 5, local)</strong> – Real, unmocked, end-to-end validation
+in an isolated throwaway root under the session scratchpad: real
+<code class="docutils literal notranslate"><span class="pre">seamm-webui</span></code> + <code class="docutils literal notranslate"><span class="pre">seamm-jobserver</span></code> processes against a fresh
+datastore and a two-queue (<code class="docutils literal notranslate"><span class="pre">fast</span></code>/<code class="docutils literal notranslate"><span class="pre">slow</span></code>, both <code class="docutils literal notranslate"><span class="pre">type=local</span></code>) ini
+file, a real <code class="docutils literal notranslate"><span class="pre">Dashboard</span></code> (no credentials, “none”-auth short-circuit)
+submitting two real <code class="docutils literal notranslate"><span class="pre">FromSMILESStep</span></code> jobs, one per queue. Both
+finished successfully with their datastore row’s recorded queue
+matching exactly what was requested – confirmed from the real
+datastore. Paul’s live <code class="docutils literal notranslate"><span class="pre">~/SEAMM</span></code>/<code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV</span></code> JobServer/webui
+processes confirmed still running, untouched, throughout. Asked Paul
+whether to also validate against a real remote SLURM queue
+(e.g. MolSSI10); he replied “Fine to update both the local DEV server
+and MolSSI10 – that way both you and I can test both.”</p></li>
+<li><p><strong>2026-08-10 (Phase 5, live redeployment + MolSSI10)</strong> – Per Paul’s
+go-ahead above: redeployed for real to <code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV</span></code>. Found (unrelated
+to this campaign) that its JobServer had been silently running in
+plain local-subprocess mode for some time – <code class="docutils literal notranslate"><span class="pre">Mac.ini</span></code> orphaned by a
+hostname change to <code class="docutils literal notranslate"><span class="pre">PaulsPersonal.local</span></code>, so the “validated working”
+SLURM/ssh-transport dispatch it documented had not actually been active.
+Fixed with a new, correctly-named <code class="docutils literal notranslate"><span class="pre">PaulsPersonal.local.ini</span></code> (same
+<code class="docutils literal notranslate"><span class="pre">[molssi10]</span></code> section plus a new <code class="docutils literal notranslate"><span class="pre">[local]</span></code> queue, default unchanged).
+Also found the hand-run dev <code class="docutils literal notranslate"><span class="pre">seamm-webui</span></code> process was missing
+<code class="docutils literal notranslate"><span class="pre">--root</span></code> and running a stale <code class="docutils literal notranslate"><span class="pre">.venv</span></code> install that had even pulled a
+<em>released</em> (pre-campaign) <code class="docutils literal notranslate"><span class="pre">seamm-slurm</span></code> from PyPI as a dependency –
+fixed by reinstalling this checkout’s <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>/<code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>
+into that <code class="docutils literal notranslate"><span class="pre">.venv</span></code> and relaunching with the correct flags. Restarted
+the JobServer via <code class="docutils literal notranslate"><span class="pre">launchctl</span> <span class="pre">kickstart</span></code> (matching the <code class="docutils literal notranslate"><span class="pre">2026-08-05</span></code>
+campaign’s own precedent for this launchd-managed process). Left
+MolSSI10’s own resident services, the old <code class="docutils literal notranslate"><span class="pre">seamm-dashboard</span></code> Flask
+app, and Paul’s production (non-dev) JobServer/Dashboard completely
+untouched throughout. Confirmed <code class="docutils literal notranslate"><span class="pre">squeue</span></code> empty on molssi10 before
+submitting. Submitted one real job to each of the two live queues:
+<code class="docutils literal notranslate"><span class="pre">local</span></code> finished as a genuine local subprocess; <code class="docutils literal notranslate"><span class="pre">molssi10</span></code> finished
+with a real <code class="docutils literal notranslate"><span class="pre">slurm_job_id</span></code>, independently confirmed via <code class="docutils literal notranslate"><span class="pre">sacct</span> <span class="pre">-j</span> <span class="pre">28</span></code>
+on molssi10 itself (<code class="docutils literal notranslate"><span class="pre">COMPLETED</span></code>, exit <code class="docutils literal notranslate"><span class="pre">0:0</span></code>). Cleaned up only this
+test’s own remote scratch directory, leaving Paul’s pre-existing ones
+and the local datastore job rows (as a visible record) untouched.
+<strong>This closes out Phase 5 and the campaign’s implementation work.</strong>
+Nothing in any of the five touched packages (<code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>,
+<code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>, <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>, <code class="docutils literal notranslate"><span class="pre">seamm_dashboard_client</span></code>,
+<code class="docutils literal notranslate"><span class="pre">seamm</span></code>) has been committed or released yet.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../2026-08-05/index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">2026-08-05 – SLURM submission for JobServer</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../../../api/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">API Documentation</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#why">Why</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#where-this-needs-to-land-and-why">Where this needs to land, and why</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#guiding-decisions-locked-in">Guiding decisions (locked in)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#open-questions-not-yet-locked-in-paul-s-call">Open questions (not yet locked in – Paul’s call)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#architecture">Architecture</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#phased-plan">Phased plan</a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-1-seamm-slurm-local-section-type-enumeration-done">Phase 1 – <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>: local section type + enumeration (done)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-2-seamm-jobserver-per-job-routing-done">Phase 2 – <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code>: per-job routing (done)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-3-seamm-webui-get-api-queues-done">Phase 3 – <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>: <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code> (done)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-4-seamm-dashboard-client-seamm-tk-job-handler-py-the-user-facing-ui-done">Phase 4 – <code class="docutils literal notranslate"><span class="pre">seamm_dashboard_client</span></code> + <code class="docutils literal notranslate"><span class="pre">seamm/tk_job_handler.py</span></code>: the user-facing UI (done)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#phase-5-validation-local-two-queue-done-remote-slurm-queue-not-started">Phase 5 – validation (local two-queue done; remote SLURM queue not started)</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#status-log">Status log</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../../../_sources/developer_guide/campaigns/2026-08-10/index.rst.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.20.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

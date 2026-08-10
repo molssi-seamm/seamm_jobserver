@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>2026-08-05 – SLURM submission for JobServer &#8212; SEAMM Jobserver 2026.8.9 documentation</title>
+    <title>2026-08-05 – SLURM submission for JobServer &#8212; SEAMM Jobserver 2026.8.10 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../../_static/documentation_options.js?v=7760334a"></script>
+    <script src="../../../_static/documentation_options.js?v=7ddc0e42"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,11 +60,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
-    <link rel="next" title="API Documentation" href="../../../api/index.html" />
+    <link rel="next" title="2026-08-10 – Multi-queue job routing (one Dashboard/JobServer, many clusters)" href="../2026-08-10/index.html" />
     <link rel="prev" title="Campaigns" href="../index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.9" />
+  <meta name="docsearch:version" content="2026.8.10" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -456,6 +456,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="../index.html">Campaigns</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">2026-08-05 – SLURM submission for JobServer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../2026-08-10/index.html">2026-08-10 – Multi-queue job routing (one Dashboard/JobServer, many clusters)</a></li>
 </ul>
 </details></li>
 </ul>
@@ -1602,8 +1603,15 @@ crash-restart loop). Pushed and PR’d through the same release-skill
 cycle as the rest of Phase 8: HISTORY entry (<code class="docutils literal notranslate"><span class="pre">2026.8.9</span></code>, a new day so
 not a same-day <code class="docutils literal notranslate"><span class="pre">.1</span></code>), pre-flight checks, a small User Guide addition
 clarifying that reattachment is now correctly per-job rather than
-per-instance-mode. <a class="reference external" href="https://github.com/molssi-seamm/seamm_jobserver/pull/19">PR #19</a> open for
-<code class="docutils literal notranslate"><span class="pre">seamm</span></code> review; not yet merged or released.</p></li>
+per-instance-mode. <a class="reference external" href="https://github.com/molssi-seamm/seamm_jobserver/pull/19">PR #19</a> merged by
+<code class="docutils literal notranslate"><span class="pre">seamm</span></code>, released as <code class="docutils literal notranslate"><span class="pre">2026.8.9</span></code>, local checkout synced via
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">update</span></code> (<code class="docutils literal notranslate"><span class="pre">dev</span> <span class="pre">==</span> <span class="pre">main</span></code>, clean <code class="docutils literal notranslate"><span class="pre">2026.8.9</span></code> install, 58/58
+tests green). The live <code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV</span></code> JobServer was already running
+this exact fix from its earlier source install/restart (see above) –
+functionally identical to the now-released version, just not
+re-restarted purely to pick up a clean (non-<code class="docutils literal notranslate"><span class="pre">+dirty</span></code>) version string,
+since there’s no behavioral difference to gain from doing so.
+<strong>This closes out the Phase 8 campaign.</strong></p></li>
 </ul>
 </section>
 </section>
@@ -1628,11 +1636,11 @@ per-instance-mode. <a class="reference external" href="https://github.com/molssi
       </div>
     </a>
     <a class="right-next"
-       href="../../../api/index.html"
+       href="../2026-08-10/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">API Documentation</p>
+        <p class="prev-next-title">2026-08-10 – Multi-queue job routing (one Dashboard/JobServer, many clusters)</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
