@@ -1112,5 +1112,12 @@ Status log
   not a same-day ``.1``), pre-flight checks, a small User Guide addition
   clarifying that reattachment is now correctly per-job rather than
   per-instance-mode. `PR #19
-  <https://github.com/molssi-seamm/seamm_jobserver/pull/19>`_ open for
-  ``seamm`` review; not yet merged or released.
+  <https://github.com/molssi-seamm/seamm_jobserver/pull/19>`_ merged by
+  ``seamm``, released as ``2026.8.9``, local checkout synced via
+  ``make update`` (``dev == main``, clean ``2026.8.9`` install, 58/58
+  tests green). The live ``~/SEAMM_DEV`` JobServer was already running
+  this exact fix from its earlier source install/restart (see above) --
+  functionally identical to the now-released version, just not
+  re-restarted purely to pick up a clean (non-``+dirty``) version string,
+  since there's no behavioral difference to gain from doing so.
+  **This closes out the Phase 8 campaign.**

@@ -1,6 +1,29 @@
 =======
 History
 =======
+2026.8.10 -- Route jobs to multiple queues/clusters from one JobServer instance
+    * A JobServer instance can now be configured with more than one queue
+      (cluster/section) in its ``<root>/<jobserver-name>.ini`` and route
+      each job to the one it asks for (``parameters["queue"]``), falling
+      back to the instance's default queue if it doesn't specify one.
+      Requesting an unknown queue, or no queue with no default configured,
+      fails the job immediately (``startup error``) rather than silently
+      running it somewhere unintended.
+    * Each queue's ``max_concurrent_jobs`` is enforced independently, so
+      one full queue never blocks another from accepting new jobs, and
+      SLURM polling is batched per queue so two different clusters'
+      same-numbered SLURM job ids are never compared against each other.
+    * A ``type = local`` queue (see ``seamm_slurm``'s ``2026.8.10``
+      release) and one or more ``type = slurm`` queues can now coexist on
+      the same JobServer instance -- some jobs run as local subprocesses,
+      others dispatch to real SLURM clusters, from one process.
+    * A SLURM job's ``job_data.json`` now records which queue it ran on
+      and its SLURM job id (found from real usage: nothing previously told
+      a user which cluster a finished job had actually run on).
+    * No ``<root>/<jobserver-name>.ini`` at all means behavior is
+      unchanged from before this feature existed -- every job still runs
+      as an uncapped local subprocess.
+
 2026.8.9 -- Bugfix: startup reattachment could misapply SLURM staging to a local job
     * On restart, a job's ``running``/``kill`` datastore row was reattached
       based on whether the JobServer instance is *currently*
