@@ -20,7 +20,7 @@ import traceback
 
 import seamm_jobserver
 import seamm_util
-from seamm_slurm.config import load_slurm_config
+from seamm_slurm.config import list_sections, load_slurm_config
 from seamm_slurm.script import build_script
 from seamm_slurm.stage import StageError
 
@@ -93,9 +93,23 @@ class JobServer(collections.abc.MutableMapping):
         self._db_path = None
         self._tasks = set()
         self._jobs = {}
-        self._slurm = None
-        self._slurm_backend = None
-        self._stager = None
+        # Every cluster/queue target this instance can route jobs to (from
+        # <root>/<jobserver-name>.ini), keyed by section name -- empty
+        # means "no such file," i.e. every job runs as an uncapped local
+        # subprocess, exactly as if this feature did not exist. See
+        # docs/developer_guide/campaigns/2026-08-10/ (multi-queue routing)
+        # for the design; 2026-08-05/ for the original single-section SLURM
+        # integration this generalizes.
+        self._sections = {}
+        # Which section a job uses when it doesn't request one explicitly
+        # (this instance's [DEFAULT] default=, or the sole section). None
+        # when self._sections is empty.
+        self._default_queue = None
+        # Built once per type=slurm section at startup -- keyed the same
+        # way as self._sections. type=local sections have no backend/
+        # stager at all; jobs routed there use the local-subprocess path.
+        self._backends = {}
+        self._stagers = {}
         self._tk_root = None
         self._after_id = None
         self._status_id = None
@@ -144,6 +158,19 @@ class JobServer(collections.abc.MutableMapping):
     @property
     def db(self):
         return self._db
+
+    def _resolve_queue(self, data):
+        """The queue (section name) a tracked job belongs to.
+
+        Jobs started or reattached by this campaign's code always record
+        ``"queue"`` explicitly (see ``_start_job_slurm``/
+        ``_reattach_slurm_jobs``). This fallback exists for a row that
+        predates the multi-queue feature entirely -- before it existed, a
+        JobServer instance could only ever have had one section, so that
+        section (this instance's default) is unambiguously the right
+        answer.
+        """
+        return data.get("queue") or self._default_queue
 
     def check_for_stopped_jobs(self):
         """Look for jobs that should be actively stopped: either their
@@ -202,28 +229,36 @@ class JobServer(collections.abc.MutableMapping):
                 self.logger.warning(f"Error stopping local job {job_id}: {e}")
         else:
             slurm_id = data["slurm_job_id"]
+            queue = self._resolve_queue(data)
             try:
-                self._slurm_backend.cancel(slurm_id)
+                self._backends[queue].cancel(slurm_id)
             except Exception as e:
                 self.logger.warning(
                     f"Error cancelling SLURM job {job_id} ({slurm_id}): {e}"
                 )
 
     def check_for_finished_jobs(self):
-        """Check whether jobs have finished."""
-        if self._slurm is not None:
-            self._check_for_finished_jobs_slurm()
-        else:
-            self._check_for_finished_jobs_local()
+        """Check whether jobs have finished.
+
+        Both locally-run and SLURM-submitted jobs may be tracked
+        simultaneously now that a single JobServer instance can serve
+        multiple queues of different types (a ``type = local`` section and
+        one or more ``type = slurm`` sections at once) -- so both passes
+        always run, each filtering ``self._jobs`` down to its own mode.
+        """
+        self._check_for_finished_jobs_local()
+        self._check_for_finished_jobs_slurm()
 
     def _check_for_finished_jobs_local(self):
         """Check whether locally-run (non-SLURM) jobs have finished, and
         finalize their datastore status here -- the job's own process no
-        longer writes it directly (see Phase 8 in the campaign doc: the
-        JobServer, not the job, now owns every terminal status write, the
-        same as SLURM mode already required)."""
+        longer writes it directly (see Phase 8 in the 2026-08-05 campaign
+        doc: the JobServer, not the job, now owns every terminal status
+        write, the same as SLURM mode already required)."""
         finished = []
         for job_id, data in self._jobs.items():
+            if data.get("mode") != "local":
+                continue
             pid = data["pid"]
             process = data["process"]
             try:
@@ -244,6 +279,9 @@ class JobServer(collections.abc.MutableMapping):
             state = self._read_job_data_state(data["wdir"])
             bucket = None
             if state is not None:
+                queue = data.get("queue")
+                if queue:
+                    self._annotate_job_data(data["wdir"], {"queue": queue})
                 self.logger.info(f"Job {job_id} finished ({pid=}) -> {state!r}.")
                 bucket = "successful" if state == "finished" else "failed"
             else:
@@ -287,29 +325,46 @@ class JobServer(collections.abc.MutableMapping):
 
         SLURM is the source of truth for *whether* a job has finished; the
         JobServer is the sole writer of the datastore's terminal status for
-        every job (see Phase 8 in the campaign doc -- the job's own process
-        used to write this directly, which both duplicated this logic and
-        cannot work at all once a job may run on a host with no access to
-        the datastore's sqlite file). ``_finalize_or_resubmit_slurm_job``
-        does the actual finalize-or-resubmit work, trusting
-        ``job_data.json`` over SLURM's own completed/failed category when
-        both are available -- SLURM reporting a job "completed" only means
-        the process exited 0, not that the flowchart itself considered the
-        run successful.
+        every job (see Phase 8 in the 2026-08-05 campaign doc).
+        ``_finalize_or_resubmit_slurm_job`` does the actual
+        finalize-or-resubmit work, trusting ``job_data.json`` over SLURM's
+        own completed/failed category when both are available -- SLURM
+        reporting a job "completed" only means the process exited 0, not
+        that the flowchart itself considered the run successful.
+
+        Tracked SLURM-mode jobs may span more than one queue/backend at
+        once (different clusters, or even different SLURM instances of the
+        same cluster) -- polled in batches grouped by queue, one
+        ``poll_many()`` call per distinct backend per cycle, never one call
+        per job, and never mixing two backends' job-id namespaces together
+        (two different clusters could coincidentally reuse the same SLURM
+        job id).
         """
-        if not self._jobs:
+        slurm_job_ids = [
+            job_id for job_id, data in self._jobs.items() if data.get("mode") == "slurm"
+        ]
+        if not slurm_job_ids:
             return
 
-        id_map = {data["slurm_job_id"]: job_id for job_id, data in self._jobs.items()}
-        statuses = self._slurm_backend.poll_many(list(id_map.keys()))
+        by_queue = {}
+        for job_id in slurm_job_ids:
+            queue = self._resolve_queue(self._jobs[job_id])
+            by_queue.setdefault(queue, []).append(job_id)
+
+        statuses_by_queue = {}
+        for queue, job_ids in by_queue.items():
+            slurm_ids = [self._jobs[jid]["slurm_job_id"] for jid in job_ids]
+            statuses_by_queue[queue] = self._backends[queue].poll_many(slurm_ids)
 
         # Snapshot: _finalize_or_resubmit_slurm_job may resubmit, which
         # mutates self._jobs/_times for job_id in place (new slurm_job_id)
-        # -- don't iterate the live dict while that happens.
+        # -- don't iterate a live view of the dict while that happens.
         finished = []
-        for job_id, data in list(self._jobs.items()):
+        for job_id in slurm_job_ids:
+            data = self._jobs[job_id]
+            queue = self._resolve_queue(data)
             slurm_id = data["slurm_job_id"]
-            status = statuses.get(slurm_id)
+            status = statuses_by_queue[queue].get(slurm_id)
 
             if status is not None and not status.is_terminal:
                 self.logger.debug(
@@ -374,6 +429,42 @@ class JobServer(collections.abc.MutableMapping):
         except (OSError, ValueError, KeyError):
             return None
 
+    @staticmethod
+    def _annotate_job_data(wdir, extra):
+        """Add extra top-level key/value pairs to ``<wdir>/job_data.json``,
+        if it exists and parses.
+
+        The remote flowchart process that wrote this file has no idea
+        which queue the JobServer routed it through, or what SLURM job id
+        it ran as -- that's routing metadata only the JobServer itself
+        knows. Found via real usage: Paul submitted a job through the new
+        multi-queue picker and, once it finished, could not tell from
+        ``job.out`` or anywhere else which queue/cluster it had actually
+        run on (the ``~cpuinfo`` block Phase 8 of the 2026-08-05 campaign
+        added is real evidence -- a different CPU model than this Mac --
+        but not something a user would think to decode for that purpose).
+        Writing ``queue``/``slurm_job_id`` here, alongside ``~cpuinfo``,
+        puts the answer directly in the one file everyone already reads.
+
+        Best-effort and silent: a missing or unparseable file means
+        nothing to annotate, not an error -- this must never be able to
+        turn a successful job into a failure just because a debugging
+        aid couldn't be written.
+        """
+        path = Path(wdir) / "job_data.json"
+        if not path.exists():
+            return
+        try:
+            text = path.read_text()
+            data = json.loads(text[text.index("{") :])
+        except (OSError, ValueError):
+            return
+        data.update(extra)
+        try:
+            path.write_text("!MolSSI job_data 1.0\n" + json.dumps(data, indent=3))
+        except OSError:
+            pass
+
     def _finalize_job_status(self, job_id, status, expected_current="running"):
         """Force a job's datastore status, but only if it still has the
         expected current status -- avoids clobbering a status something
@@ -386,14 +477,30 @@ class JobServer(collections.abc.MutableMapping):
         )
         self.db.commit()
 
+    def _mark_startup_error(self, job_id, message):
+        """Fail a job at startup time -- an unroutable/unauthorized request
+        (unknown queue, no default queue configured, a rejected SLURM
+        override) or an exception from ``start_job``. Never leaves the row
+        stuck at ``submitted``."""
+        self.logger.warning(f"Job {job_id}: {message}")
+        current_time = datetime.now(timezone.utc)
+        cursor = self.db.cursor()
+        cursor.execute(
+            "UPDATE jobs"
+            "   SET status='startup error', started = ?, finished = ?"
+            " WHERE id = ?",
+            (current_time, current_time, job_id),
+        )
+        self.db.commit()
+
     def _finalize_or_resubmit_slurm_job(self, job_id, data, resubmit_count):
         """Finalize a SLURM job's datastore status now that SLURM reports it
         terminal (or has no record of it at all), or resubmit it if there's
         nothing yet to finalize from.
 
         For a ``transport = ssh`` job (``data["remote_wdir"]`` set), the
-        remote working directory is pulled back to ``wdir`` first (via
-        ``self._stager``), so ``job_data.json`` and the flowchart's own
+        remote working directory is pulled back to ``wdir`` first (via this
+        job's queue's stager), so ``job_data.json`` and the flowchart's own
         results land where the JobServer -- and the dashboard -- can see
         them. A stage-out failure is a transient transfer problem, not a
         job failure: it's worth a retry next poll cycle, not conflated
@@ -404,9 +511,9 @@ class JobServer(collections.abc.MutableMapping):
         managed to write one -- this is the common case (a normal finish),
         not just a stalled-job fallback, since the JobServer is now the
         only thing that writes the datastore's terminal status. Falls back
-        to resubmitting, up to ``max_resubmits``, since flowcharts
-        checkpoint completed steps and safely resume (see the design plan);
-        beyond the cap, gives up and marks the job ``error``.
+        to resubmitting, up to the queue's ``max_resubmits``, since
+        flowcharts checkpoint completed steps and safely resume; beyond the
+        cap, gives up and marks the job ``error``.
 
         Returns
         -------
@@ -420,10 +527,12 @@ class JobServer(collections.abc.MutableMapping):
         """
         wdir = data["wdir"]
         remote_wdir = data.get("remote_wdir")
+        queue = self._resolve_queue(data)
+        section = self._sections[queue]
 
         if remote_wdir is not None:
             try:
-                self._stager.stage_out(remote_wdir, wdir)
+                self._stagers[queue].stage_out(remote_wdir, wdir)
             except StageError as e:
                 self.logger.warning(
                     f"Job {job_id}: stage_out from {remote_wdir} failed, "
@@ -433,6 +542,9 @@ class JobServer(collections.abc.MutableMapping):
 
         state = self._read_job_data_state(wdir)
         if state is not None:
+            self._annotate_job_data(
+                wdir, {"queue": queue, "slurm_job_id": data["slurm_job_id"]}
+            )
             self.logger.info(f"Job {job_id}: finalizing as {state!r} (job_data.json).")
             self._finalize_job_status(job_id, state)
             if state == "finished":
@@ -441,7 +553,7 @@ class JobServer(collections.abc.MutableMapping):
                 self.failed_jobs += 1
             return False
 
-        max_resubmits = self._slurm.max_resubmits
+        max_resubmits = section.max_resubmits
         if resubmit_count >= max_resubmits:
             self.logger.warning(
                 f"Job {job_id}: giving up after {resubmit_count} resubmit(s) "
@@ -459,81 +571,137 @@ class JobServer(collections.abc.MutableMapping):
             job_id,
             wdir,
             data["cmdline"],
+            queue,
             resubmit_count=resubmit_count + 1,
             slurm_overrides=data.get("slurm_overrides"),
         )
         return True
 
     def check_for_new_jobs(self):
-        """Check the database for new jobs that are runnable."""
-        query = (
+        """Check the database for new jobs that are runnable.
+
+        If this instance has no configured queues at all
+        (``self._sections`` empty, i.e. no ``<root>/<jobserver-name>.ini``),
+        behavior is exactly what it was before the multi-queue feature
+        existed: every submitted job runs immediately as an uncapped local
+        subprocess, regardless of any ``queue`` a job's ``parameters`` might
+        happen to carry. Otherwise, each submitted job is routed to the
+        queue it requested (``parameters["queue"]``), falling back to this
+        instance's default queue if it didn't request one -- an unknown or
+        missing-with-no-default queue fails the job immediately rather than
+        silently running it somewhere unintended. Each queue has its own
+        ``max_concurrent_jobs``, checked independently, so one full queue
+        never blocks another from accepting new jobs.
+        """
+        if not self._sections:
+            self._check_for_new_jobs_unmanaged()
+            return
+
+        counts = {name: 0 for name in self._sections}
+        for data in self._jobs.values():
+            queue = self._resolve_queue(data)
+            if queue in counts:
+                counts[queue] += 1
+        available = {
+            name: section.max_concurrent_jobs - counts[name]
+            for name, section in self._sections.items()
+        }
+        if all(n <= 0 for n in available.values()):
+            self.logger.debug("All configured queues are at their max_concurrent_jobs.")
+            return
+
+        cursor = self.db.cursor()
+        self.logger.debug("Checking jobs in datastore")
+        cursor.execute(
             "SELECT id, path, json_extract(parameters, '$.cmdline'),"
-            "       json_extract(parameters, '$.slurm')"
+            "       json_extract(parameters, '$.slurm'),"
+            "       json_extract(parameters, '$.queue')"
             "  FROM jobs"
             " WHERE status = 'submitted'"
         )
-        params = ()
+        rows = cursor.fetchall()
 
-        if self._slurm is not None:
-            available = self._slurm.max_concurrent_jobs - len(self._jobs)
-            if available <= 0:
-                self.logger.debug(
-                    "At max_concurrent_jobs "
-                    f"({self._slurm.max_concurrent_jobs}); not starting new "
-                    "jobs this cycle."
+        for job_id, path, cmdline_json, slurm_json, requested_queue in rows:
+            queue = requested_queue or self._default_queue
+            if queue is None:
+                self._mark_startup_error(
+                    job_id,
+                    "did not request a queue, and this JobServer has no "
+                    "default queue configured",
                 )
-                return
-            query += " LIMIT ?"
-            params = (available,)
+                continue
+            if queue not in self._sections:
+                self._mark_startup_error(job_id, f"requested unknown queue '{queue}'")
+                continue
+            if available[queue] <= 0:
+                # This queue is full this cycle -- leave it 'submitted' and
+                # try again next cycle; other queues are unaffected.
+                continue
 
-        cursor = self.db.cursor()
-
-        self.logger.debug("Checking jobs in datastore")
-        cursor.execute(query, params)
-        while True:
-            result = cursor.fetchone()
-            if result is None:
-                break
-            job_id, path, cmdline, slurm_overrides = result
-            cmdline = json.loads(cmdline)
-            slurm_overrides = json.loads(slurm_overrides) if slurm_overrides else {}
+            cmdline = json.loads(cmdline_json)
+            slurm_overrides = json.loads(slurm_json) if slurm_json else {}
 
             try:
                 pid = self.start_job(
-                    job_id, path, cmdline, slurm_overrides=slurm_overrides
+                    job_id, path, cmdline, queue=queue, slurm_overrides=slurm_overrides
                 )
             except Exception as e:
-                self.logger.warning(f"An error occurred starting job {job_id}:\n\t{e}")
-                status = "startup error"
+                self._mark_startup_error(job_id, f"error starting: {e}")
+                continue
+
+            available[queue] -= 1
+            section = self._sections[queue]
+            if section.type == "local":
                 current_time = datetime.now(timezone.utc)
-                cursor = self.db.cursor()
-                cursor.execute(
+                update_cursor = self.db.cursor()
+                update_cursor.execute(
                     "UPDATE jobs"
-                    "   SET status=?, started = ?, finished = ?"
+                    "   SET status='running', started = ?,"
+                    "       parameters=json_set(json_set(jobs.parameters,"
+                    "         '$.pid', ?), '$.queue', ?)"
                     " WHERE id = ?",
-                    (status, current_time, current_time, job_id),
+                    (current_time, pid, queue, job_id),
                 )
                 self.db.commit()
+                self.logger.info(f"Started job {job_id} with pid={pid}, path={path}")
             else:
-                if self._slurm is None:
-                    status = "running"
-                    current_time = datetime.now(timezone.utc)
-                    cursor = self.db.cursor()
-                    cursor.execute(
-                        "UPDATE jobs"
-                        "   SET status=?, started = ?,"
-                        "       parameters=json_set(jobs.parameters, '$.pid', ?)"
-                        " WHERE id = ?",
-                        (status, current_time, pid, job_id),
-                    )
-                    self.db.commit()
+                # _start_job_slurm already updated the datastore itself.
+                self.logger.info(
+                    f"Started job {job_id} via SLURM (queue={queue}), path={path}"
+                )
 
-                    self.logger.info(
-                        f"Started job {job_id} with pid={pid}, path={path}"
-                    )
-                else:
-                    # _start_job_slurm already updated the datastore itself.
-                    self.logger.info(f"Started job {job_id} via SLURM, path={path}")
+    def _check_for_new_jobs_unmanaged(self):
+        """No ``<root>/<jobserver-name>.ini`` at all: the exact behavior
+        from before the multi-queue feature existed. Every submitted job
+        runs immediately as an uncapped local subprocess."""
+        cursor = self.db.cursor()
+        self.logger.debug("Checking jobs in datastore")
+        cursor.execute(
+            "SELECT id, path, json_extract(parameters, '$.cmdline')"
+            "  FROM jobs"
+            " WHERE status = 'submitted'"
+        )
+        rows = cursor.fetchall()
+
+        for job_id, path, cmdline_json in rows:
+            cmdline = json.loads(cmdline_json)
+            try:
+                pid = self.start_job(job_id, path, cmdline)
+            except Exception as e:
+                self._mark_startup_error(job_id, f"error starting: {e}")
+                continue
+
+            current_time = datetime.now(timezone.utc)
+            update_cursor = self.db.cursor()
+            update_cursor.execute(
+                "UPDATE jobs"
+                "   SET status='running', started = ?,"
+                "       parameters=json_set(jobs.parameters, '$.pid', ?)"
+                " WHERE id = ?",
+                (current_time, pid, job_id),
+            )
+            self.db.commit()
+            self.logger.info(f"Started job {job_id} with pid={pid}, path={path}")
 
     def gui_create(self):
         """Create the tkinter GUI."""
@@ -716,9 +884,11 @@ class JobServer(collections.abc.MutableMapping):
         for job_id in sorted(status["Jobs"].keys()):
             js = status["Jobs"][job_id]
             if "slurm_job_id" in js:
+                queue = js.get("queue")
+                suffix = f" (queue={queue})" if queue else ""
                 text.insert(
                     "end",
-                    f"\n{job_id}: slurm_job_id={js['slurm_job_id']}\n",
+                    f"\n{job_id}: slurm_job_id={js['slurm_job_id']}{suffix}\n",
                 )
                 continue
             memory_percent = js["memory %"]
@@ -763,6 +933,32 @@ class JobServer(collections.abc.MutableMapping):
             int(self.status_interval * 1000), self.gui_status_loop
         )
 
+    def _load_queue_config(self, root):
+        """Load every configured cluster/queue section from
+        ``<root>/<jobserver-name>.ini``, if any, and build a SLURM
+        backend/stager for each ``type = slurm`` section (``type = local``
+        sections have none -- jobs routed there use the existing
+        local-subprocess path instead).
+
+        Entirely additive: no ini file at all means ``self._sections``
+        stays empty and every job runs as an uncapped local subprocess,
+        exactly as if this feature -- and the original single-section SLURM
+        integration it generalizes -- did not exist. Split out from
+        ``initialize()`` so it can be unit-tested without the rest of that
+        method's CLI-parsing/logging/GUI setup.
+        """
+        default_section = load_slurm_config(root, self.options["name"])
+        self._sections = list_sections(root, self.options["name"])
+        self._default_queue = (
+            default_section.name if default_section is not None else None
+        )
+        self._backends = {}
+        self._stagers = {}
+        for name, section in self._sections.items():
+            if section.type == "slurm":
+                self._backends[name] = section.build_backend()
+                self._stagers[name] = section.build_stager()
+
     def initialize(self):
         """Parse the command-line and setup the JobServer"""
         parser = self.setup_parser()
@@ -791,18 +987,28 @@ class JobServer(collections.abc.MutableMapping):
 
         self.check_interval = self.options["check_interval"]
 
-        # SLURM config, if any -- <root>/<jobserver-name>.ini. Absence means
-        # "run jobs as local subprocesses", exactly as before this existed.
+        # Queue/SLURM config, if any -- <root>/<jobserver-name>.ini. Absence
+        # means "run jobs as local subprocesses", exactly as before this
+        # existed.
         root = Path(self.seamm_options["root"]).expanduser()
-        self._slurm = load_slurm_config(root, self.options["name"])
-        if self._slurm is not None:
-            self._slurm_backend = self._slurm.build_backend()
-            self._stager = self._slurm.build_stager()
+        self._load_queue_config(root)
+        if self._sections:
             logger.info(
-                f"Using SLURM (section '{self._slurm.name}', transport="
-                f"'{self._slurm.transport}') to run jobs, up to "
-                f"{self._slurm.max_concurrent_jobs} at a time."
+                f"Configured queues: {sorted(self._sections)} "
+                f"(default={self._default_queue!r})."
             )
+            for name, section in self._sections.items():
+                if section.type == "slurm":
+                    logger.info(
+                        f"  queue '{name}': SLURM via transport="
+                        f"'{section.transport}', up to "
+                        f"{section.max_concurrent_jobs} at a time."
+                    )
+                else:
+                    logger.info(
+                        f"  queue '{name}': local subprocess, up to "
+                        f"{section.max_concurrent_jobs} at a time."
+                    )
 
         # Log how we are starting
         self._ini_files = parser.get_ini_files()
@@ -905,16 +1111,17 @@ class JobServer(collections.abc.MutableMapping):
         # Find any jobs already running. A 'running'/'kill' row is a local
         # pid or a SLURM submission based on what was actually recorded for
         # *that* job, not on whether this JobServer instance is currently
-        # SLURM-configured -- a row can predate this instance's SLURM config
-        # (e.g. its first restart after SLURM was just enabled). So always
-        # check for local pids first (regardless of mode), then -- only if
-        # SLURM is configured, since polling needs a backend -- reconcile
-        # whatever's left (real SLURM submissions, or rows with neither a
-        # pid nor a slurm_job_id recorded at all). _reattach_local_jobs
-        # leaves alone (does not finalize) any row that also has a
-        # slurm_job_id, so the two passes never fight over the same row.
+        # queue-configured -- a row can predate this instance's queue
+        # config (e.g. its first restart after it was just enabled). So
+        # always check for local pids first (regardless of mode), then --
+        # only if at least one type=slurm queue is configured, since
+        # polling needs a real backend -- reconcile whatever's left (real
+        # SLURM submissions, or rows with neither a pid nor a slurm_job_id
+        # recorded at all). _reattach_local_jobs leaves alone (does not
+        # finalize) any row that also has a slurm_job_id, so the two passes
+        # never fight over the same row.
         self._reattach_local_jobs()
-        if self._slurm is not None:
+        if self._backends:
             self._reattach_slurm_jobs()
 
         if self._tk_root is not None:
@@ -951,14 +1158,15 @@ class JobServer(collections.abc.MutableMapping):
         """On startup, find any locally-run jobs already in progress.
 
         Runs unconditionally, regardless of whether this JobServer instance
-        is currently SLURM-configured -- a 'running'/'kill' row with a real
+        is currently queue-configured -- a 'running'/'kill' row with a real
         recorded ``pid`` is a genuine local job no matter the instance's
-        current mode (e.g. it predates SLURM being enabled here), and must
-        be checked before anything else gets a chance to treat it as some
-        other kind of lost job. A row with no ``pid`` but a recorded
-        ``slurm_job_id`` is deliberately left alone here -- that is
-        ``_reattach_slurm_jobs``'s job, called separately, only when SLURM
-        is actually configured (checking it needs a real backend to poll).
+        current mode (e.g. it predates a queue config being added here),
+        and must be checked before anything else gets a chance to treat it
+        as some other kind of lost job. A row with no ``pid`` but a
+        recorded ``slurm_job_id`` is deliberately left alone here -- that
+        is ``_reattach_slurm_jobs``'s job, called separately, only when at
+        least one ``type = slurm`` queue is actually configured (checking
+        it needs a real backend to poll).
 
         Also picks up ``kill``-status rows, not just ``running`` ones: a
         job whose kill was requested right before a restart still has a
@@ -967,11 +1175,12 @@ class JobServer(collections.abc.MutableMapping):
         """
         for row in self.db.execute(
             "SELECT id, status, path, json_extract(parameters, '$.pid'),"
-            "       json_extract(parameters, '$.slurm_job_id')"
+            "       json_extract(parameters, '$.slurm_job_id'),"
+            "       json_extract(parameters, '$.queue')"
             "  FROM jobs"
             " WHERE status IN ('running', 'kill')"
         ):
-            job_id, orig_status, wdir, pid, slurm_id = row
+            job_id, orig_status, wdir, pid, slurm_id, queue = row
 
             if pid is None:
                 if slurm_id is not None:
@@ -989,6 +1198,7 @@ class JobServer(collections.abc.MutableMapping):
                     if process.is_running():
                         self._jobs[job_id] = {
                             "mode": "local",
+                            "queue": queue,
                             "pid": process.pid,
                             "process": process,
                             "wdir": wdir,
@@ -1040,15 +1250,16 @@ class JobServer(collections.abc.MutableMapping):
         """On startup, find any SLURM-submitted jobs already in progress.
 
         Called separately from, and after, ``_reattach_local_jobs`` -- and
-        only when this JobServer instance is actually SLURM-configured,
-        since polling needs a real backend. A row with a recorded ``pid``
-        is skipped entirely here: ``_reattach_local_jobs`` (called first,
-        unconditionally) already resolved it one way or another -- either
-        it's still tracked as a genuine local process, or it was just
-        finalized -- and treating it as a lost SLURM submission here too
-        would be wrong on both counts (double-tracking a live local job as
-        also needing SLURM reconciliation, or trying to stage-out/resubmit
-        a job that never went anywhere near SLURM in the first place).
+        only when this JobServer instance has at least one ``type = slurm``
+        queue configured, since polling needs a real backend. A row with a
+        recorded ``pid`` is skipped entirely here: ``_reattach_local_jobs``
+        (called first, unconditionally) already resolved it one way or
+        another -- either it's still tracked as a genuine local process, or
+        it was just finalized -- and treating it as a lost SLURM submission
+        here too would be wrong on both counts (double-tracking a live
+        local job as also needing SLURM reconciliation, or trying to
+        stage-out/resubmit a job that never went anywhere near SLURM in the
+        first place).
 
         SLURM is the source of truth here, not any state JobServer itself
         remembered before restarting: look up each `running`-status job's
@@ -1059,6 +1270,16 @@ class JobServer(collections.abc.MutableMapping):
         -> the same reconciliation path as the steady-state case (trust
         job_data.json, else resubmit up to a cap, else give up) -- safe
         because flowcharts checkpoint completed steps and safely resume.
+
+        Which queue a row belongs to comes from its own recorded
+        ``parameters["queue"]``, falling back to this instance's default
+        queue for a row that predates the multi-queue feature entirely (see
+        ``_resolve_queue``) -- before it existed, a JobServer instance could
+        only ever have had the one section that is now its default. A row
+        whose resolved queue isn't one this instance actually has a SLURM
+        backend for (removed from the ini, or a stale/corrupted value)
+        can't be reconciled automatically and is logged and left alone
+        rather than guessed at.
 
         Also picks up ``kill``-status rows, not just ``running`` ones -- a
         job whose kill was requested right before a restart still needs its
@@ -1071,7 +1292,8 @@ class JobServer(collections.abc.MutableMapping):
                 "       json_extract(parameters, '$.slurm_job_id'),"
                 "       json_extract(parameters, '$.cmdline'),"
                 "       json_extract(parameters, '$.resubmit_count'),"
-                "       json_extract(parameters, '$.slurm')"
+                "       json_extract(parameters, '$.slurm'),"
+                "       json_extract(parameters, '$.queue')"
                 "  FROM jobs"
                 " WHERE status IN ('running', 'kill')"
             )
@@ -1079,12 +1301,22 @@ class JobServer(collections.abc.MutableMapping):
         if not rows:
             return
 
-        ids = [
-            str(slurm_id)
-            for _, _, _, pid, slurm_id, _, _, _ in rows
-            if pid is None and slurm_id is not None
-        ]
-        statuses = self._slurm_backend.poll_many(ids) if ids else {}
+        # Which backend/queue each candidate row belongs to, grouped for one
+        # batched poll_many() call per queue.
+        by_queue = {}
+        for row in rows:
+            pid, slurm_id, queue = row[3], row[4], row[8]
+            if pid is not None or slurm_id is None:
+                continue
+            queue = queue or self._default_queue
+            if queue not in self._backends:
+                continue  # reconciled below as "unroutable", no polling possible
+            by_queue.setdefault(queue, []).append(str(slurm_id))
+
+        statuses_by_queue = {
+            queue: self._backends[queue].poll_many(ids)
+            for queue, ids in by_queue.items()
+        }
 
         for (
             job_id,
@@ -1095,6 +1327,7 @@ class JobServer(collections.abc.MutableMapping):
             cmdline_json,
             resubmit_count,
             slurm_overrides_json,
+            row_queue,
         ) in rows:
             if pid is not None:
                 # Already resolved by _reattach_local_jobs.
@@ -1105,21 +1338,34 @@ class JobServer(collections.abc.MutableMapping):
             slurm_overrides = (
                 json.loads(slurm_overrides_json) if slurm_overrides_json else {}
             )
+            queue = row_queue or self._default_queue
+
+            if queue is None or queue not in self._backends:
+                self.logger.warning(
+                    f"Job {job_id}: recorded queue {queue!r} is not a "
+                    "type=slurm queue configured on this JobServer "
+                    "instance; cannot reconcile automatically."
+                )
+                continue
+
+            section = self._sections[queue]
             # Only meaningful -- and only computed -- for a job that was
             # actually dispatched to SLURM before (a real slurm_job_id is
             # on record): there's nothing remote to reconcile for a row
             # that never went there, and computing/using it anyway is
             # exactly the bug this docstring warns about above.
             remote_wdir = (
-                self._remote_wdir(wdir)
-                if slurm_id is not None and self._slurm.transport == "ssh"
+                self._remote_wdir(wdir, queue)
+                if slurm_id is not None and section.transport == "ssh"
                 else None
             )
 
+            statuses = statuses_by_queue.get(queue, {})
             status = statuses.get(str(slurm_id)) if slurm_id is not None else None
             if status is not None and not status.is_terminal:
                 self._jobs[job_id] = {
                     "mode": "slurm",
+                    "queue": queue,
                     "slurm_job_id": str(slurm_id),
                     "wdir": wdir,
                     "remote_wdir": remote_wdir,
@@ -1160,6 +1406,7 @@ class JobServer(collections.abc.MutableMapping):
             self._finalize_or_resubmit_slurm_job(
                 job_id,
                 {
+                    "queue": queue,
                     "wdir": wdir,
                     "remote_wdir": remote_wdir,
                     "cmdline": cmdline,
@@ -1168,18 +1415,23 @@ class JobServer(collections.abc.MutableMapping):
                 resubmit_count,
             )
 
-    def start_job(self, job_id, wdir, cmdline="", slurm_overrides=None):
-        """Run the given job, locally or via SLURM depending on whether
-        this JobServer instance has a SLURM config.
+    def start_job(self, job_id, wdir, cmdline="", queue=None, slurm_overrides=None):
+        """Run the given job, locally or via SLURM depending on the type of
+        the queue it's routed to.
 
         Parameters
         ----------
         job_id : integer
             The id of the job to run.
+        queue : str or None
+            Which configured section (cluster/queue) to route this job to.
+            ``None`` falls back to this instance's default queue -- see
+            ``_resolve_queue``. If this instance has no queues configured
+            at all, the job always runs as a local subprocess regardless.
         slurm_overrides : dict or None
             A job's requested per-directive SLURM overrides (its
             ``parameters["slurm"]``), e.g. ``{"ntasks": 4, "mem": "40G"}``.
-            Ignored in local mode. Validated against the SLURM section's
+            Ignored for a local-mode job. Validated against the queue's
             ``limits`` before use -- see ``SlurmSection.merge_overrides``.
 
         Returns
@@ -1189,33 +1441,41 @@ class JobServer(collections.abc.MutableMapping):
             ``_start_job_slurm`` updates the datastore itself in that case,
             since it also needs to record the SLURM job id.
         """
-        self.logger.info("Starting job {}".format(job_id))
+        queue = queue or self._default_queue
+        self.logger.info(f"Starting job {job_id} (queue={queue!r})")
 
-        if self._slurm is not None:
+        section = self._sections.get(queue) if queue is not None else None
+
+        if section is not None and section.type == "slurm":
             # _start_job_slurm builds the command itself, after staging
             # (transport=ssh) determines the *effective* working directory
             # -- _build_cmd needs that, not the local wdir, to be correct.
             self._start_job_slurm(
-                job_id, wdir, cmdline, slurm_overrides=slurm_overrides or {}
+                job_id, wdir, cmdline, queue, slurm_overrides=slurm_overrides or {}
             )
             return None
 
-        cmd = self._build_cmd(job_id, wdir, cmdline)
+        # type=local queue, or no queue system configured at all -- same
+        # local-subprocess path either way.
+        cmd = self._build_cmd(job_id, wdir, cmdline, queue)
         self.logger.debug(f"cmd for {job_id}: {cmd}")
-        return self._start_job_local(job_id, wdir, cmd)
+        return self._start_job_local(job_id, wdir, cmd, queue)
 
-    def _build_cmd(self, job_id, wdir, cmdline):
+    def _build_cmd(self, job_id, wdir, cmdline, queue=None):
         """Build the ``run_from_jobserver`` command line for a job -- the
         same command whether it's about to be run as a local subprocess or
         as the payload of a SLURM batch script.
 
         ``wdir`` should already be the *effective* working directory the
         job will actually run in -- the remote-staged path for a
-        ``transport = ssh`` SLURM section, or the ordinary local path
+        ``transport = ssh`` SLURM queue, or the ordinary local path
         otherwise (see ``_start_job_slurm``, which stages before calling
         this)."""
-        if self._slurm is not None and self._slurm.transport == "ssh":
-            prefix = self._remote_exe_prefix()
+        queue = queue or self._default_queue
+        section = self._sections.get(queue) if queue is not None else None
+
+        if section is not None and section.transport == "ssh":
+            prefix = self._remote_exe_prefix(queue)
         else:
             path = sys.executable
             if path is not None and path != "":
@@ -1228,9 +1488,9 @@ class JobServer(collections.abc.MutableMapping):
 
         # Check if in docker container. Only meaningful for local execution
         # (local mode, or an on-cluster SLURM JobServer) -- this inspects
-        # *this* host, which is irrelevant for a transport=ssh section
+        # *this* host, which is irrelevant for a transport=ssh queue
         # running on a different host entirely.
-        if self._slurm is None or self._slurm.transport != "ssh":
+        if section is None or section.transport != "ssh":
             cgroup = Path("/proc/self/cgroup")
             if (
                 Path("/.dockerenv").is_file()
@@ -1249,9 +1509,9 @@ class JobServer(collections.abc.MutableMapping):
 
         return cmd
 
-    def _remote_exe_prefix(self):
+    def _remote_exe_prefix(self, queue=None):
         """The argv prefix that invokes ``run_from_jobserver`` on a
-        ``transport = ssh`` section's remote host.
+        ``transport = ssh`` queue's remote host.
 
         ``_build_cmd``'s ordinary ``sys.executable``-derived path is
         meaningless there -- that's *this* host's conda env. Prefers an
@@ -1259,24 +1519,26 @@ class JobServer(collections.abc.MutableMapping):
         local mode already invokes it, no shell activation needed); falls
         back to ``conda run -n <remote_conda_env>`` if only that's set.
         """
-        if self._slurm.remote_run_from_jobserver:
-            return [self._slurm.remote_run_from_jobserver]
-        if self._slurm.remote_conda_env:
+        queue = queue or self._default_queue
+        section = self._sections[queue]
+        if section.remote_run_from_jobserver:
+            return [section.remote_run_from_jobserver]
+        if section.remote_conda_env:
             return [
                 "conda",
                 "run",
                 "-n",
-                self._slurm.remote_conda_env,
+                section.remote_conda_env,
                 "run_from_jobserver",
             ]
         raise RuntimeError(
-            f"SLURM section '{self._slurm.name}' has transport=ssh but "
+            f"SLURM queue '{section.name}' has transport=ssh but "
             "neither remote_run_from_jobserver nor remote_conda_env is set "
             "-- can't determine how to invoke run_from_jobserver on "
-            f"{self._slurm.host}."
+            f"{section.host}."
         )
 
-    def _start_job_local(self, job_id, wdir, cmd):
+    def _start_job_local(self, job_id, wdir, cmd, queue=None):
         """Run a job as a local subprocess (today's, pre-SLURM, behavior)."""
         # Create a copy of the current environment with job-specific variables
         env = os.environ.copy()
@@ -1294,6 +1556,7 @@ class JobServer(collections.abc.MutableMapping):
         )
         self._jobs[job_id] = {
             "mode": "local",
+            "queue": queue,
             "pid": process.pid,
             "process": process,
             "wdir": wdir,
@@ -1305,30 +1568,32 @@ class JobServer(collections.abc.MutableMapping):
 
         return process.pid
 
-    def _remote_wdir(self, wdir):
-        """The remote scratch path a ``transport = ssh`` section's job
+    def _remote_wdir(self, wdir, queue=None):
+        """The remote scratch path a ``transport = ssh`` queue's job
         should run in, derived from its local working directory's name and
-        the section's ``remote_root``. Deterministic across resubmits --
+        the queue's ``remote_root``. Deterministic across resubmits --
         job directory names (``Job_NNNNNN``) are unique across the whole
         datastore, not just within a project, so no collision risk."""
-        if not self._slurm.remote_root:
+        queue = queue or self._default_queue
+        section = self._sections[queue]
+        if not section.remote_root:
             raise RuntimeError(
-                f"SLURM section '{self._slurm.name}' has transport=ssh but "
+                f"SLURM queue '{section.name}' has transport=ssh but "
                 "no remote_root is set -- can't determine where to stage "
-                f"jobs on {self._slurm.host}."
+                f"jobs on {section.host}."
             )
-        return str(PurePosixPath(self._slurm.remote_root) / Path(wdir).name)
+        return str(PurePosixPath(section.remote_root) / Path(wdir).name)
 
     def _start_job_slurm(
-        self, job_id, wdir, cmdline, resubmit_count=0, slurm_overrides=None
+        self, job_id, wdir, cmdline, queue=None, resubmit_count=0, slurm_overrides=None
     ):
         """Submit a job to SLURM as a whole-flowchart batch job.
 
-        For a ``transport = ssh`` section, ``wdir`` (this job's ordinary
+        For a ``transport = ssh`` queue, ``wdir`` (this job's ordinary
         local working directory) is first staged out to a remote scratch
-        directory via ``self._stager`` (``RsyncStager``) -- everything from
-        there on (the ``--chdir`` directive, the command line baked into
-        the sbatch payload) uses that *remote* path instead, since the
+        directory via this queue's stager (``RsyncStager``) -- everything
+        from there on (the ``--chdir`` directive, the command line baked
+        into the sbatch payload) uses that *remote* path instead, since the
         remote host has no access to ``wdir`` itself. For
         ``transport = local`` (every case validated so far), staging is a
         no-op and the effective/local paths are the same.
@@ -1338,28 +1603,29 @@ class JobServer(collections.abc.MutableMapping):
         ``run_from_jobserver`` inside the active environment (see
         ``_build_cmd``), and SLURM inherits the submitting shell's
         environment (PATH included) by default, so the interpreter is
-        found the same way it would be run directly. Confirmed working
-        end-to-end during Phase 0/1 groundwork. ssh-transport instead uses
-        ``_remote_exe_prefix``, since the local interpreter path is
+        found the same way it would be run directly. ssh-transport instead
+        uses ``_remote_exe_prefix``, since the local interpreter path is
         meaningless on the remote host.
 
         ``slurm_overrides`` (a job's own ``parameters["slurm"]``, e.g.
-        ``{"ntasks": 4}``) is validated against the section's ``limits`` by
+        ``{"ntasks": 4}``) is validated against the queue's ``limits`` by
         ``merge_overrides`` -- raises ``ValueError`` for anything not
         overridable or out of bounds, which propagates up to
         ``check_for_new_jobs()``'s existing try/except and is handled the
         same as any other startup error (job marked ``startup error``).
         Never trusts that a caller (e.g. a web UI) already validated this.
         """
+        queue = queue or self._default_queue
+        section = self._sections[queue]
         slurm_overrides = slurm_overrides or {}
 
         remote_wdir = None
         effective_wdir = wdir
-        if self._slurm.transport == "ssh":
-            remote_wdir = self._remote_wdir(wdir)
-            effective_wdir = self._stager.stage_in(wdir, remote_wdir)
+        if section.transport == "ssh":
+            remote_wdir = self._remote_wdir(wdir, queue)
+            effective_wdir = self._stagers[queue].stage_in(wdir, remote_wdir)
 
-        cmd = self._build_cmd(job_id, effective_wdir, cmdline)
+        cmd = self._build_cmd(job_id, effective_wdir, cmdline, queue)
         quoted_cmd = " ".join(shlex.quote(c) for c in cmd)
         payload = (
             f"export SEAMM_JOB_ID={shlex.quote(str(job_id))}\n"
@@ -1367,7 +1633,7 @@ class JobServer(collections.abc.MutableMapping):
             f"{quoted_cmd}\n"
         )
 
-        directives = self._slurm.merge_overrides(slurm_overrides)
+        directives = section.merge_overrides(slurm_overrides)
         directives.setdefault("job_name", f"seamm-{job_id}")
         directives.setdefault("chdir", str(effective_wdir))
         script = build_script(directives, payload)
@@ -1381,10 +1647,10 @@ class JobServer(collections.abc.MutableMapping):
         except OSError as e:
             self.logger.warning(f"Could not write slurm_submit.sh for {job_id}: {e}")
 
-        slurm_job_id = self._slurm_backend.submit(script)
+        slurm_job_id = self._backends[queue].submit(script)
         self.logger.info(
             f"Job {job_id}: submitted to SLURM as {slurm_job_id} "
-            f"(attempt {resubmit_count + 1})."
+            f"(queue={queue}, attempt {resubmit_count + 1})."
         )
 
         current_time = datetime.now(timezone.utc)
@@ -1392,15 +1658,17 @@ class JobServer(collections.abc.MutableMapping):
         cursor.execute(
             "UPDATE jobs"
             "   SET status = 'running', started = ?,"
-            "       parameters = json_set(json_set(jobs.parameters,"
-            "         '$.slurm_job_id', ?), '$.resubmit_count', ?)"
+            "       parameters = json_set(json_set(json_set(jobs.parameters,"
+            "         '$.slurm_job_id', ?), '$.resubmit_count', ?),"
+            "         '$.queue', ?)"
             " WHERE id = ?",
-            (current_time, slurm_job_id, resubmit_count, job_id),
+            (current_time, slurm_job_id, resubmit_count, queue, job_id),
         )
         self.db.commit()
 
         self._jobs[job_id] = {
             "mode": "slurm",
+            "queue": queue,
             "slurm_job_id": slurm_job_id,
             "wdir": wdir,
             "remote_wdir": remote_wdir,
@@ -1487,6 +1755,7 @@ class JobServer(collections.abc.MutableMapping):
                 # No local process to inspect -- report what SLURM knows
                 # instead of psutil cpu/memory stats.
                 js[job_id] = {
+                    "queue": self._resolve_queue(data),
                     "slurm_job_id": data["slurm_job_id"],
                     "resubmit_count": data.get("resubmit_count", 0),
                 }

@@ -27,17 +27,21 @@ at ``<root>`` (the same directory as those), not in
 ``~/.seamm.d/seamm.ini``. If the file doesn't exist, the JobServer runs jobs
 locally exactly as it always has.
 
-The file has one section per cluster/queue this JobServer instance can
-submit to (currently only one is actually used -- selecting among several is
-not yet implemented, see below):
+The file has one section per queue (cluster, or a plain local subprocess --
+see "Multiple queues" below) this JobServer instance can route jobs to:
 
 .. code-block:: ini
 
     [DEFAULT]
-    # which section to use -- required if there's more than one section
+    # which section a job uses when it doesn't request one explicitly --
+    # required if there's more than one section and none of the shortcuts
+    # below apply
     default = molssi10
 
     [molssi10]
+    # type: slurm (the default if omitted) | local -- see "Multiple
+    # queues" below for type = local
+    type = slurm
     # transport: local (SLURM CLI on this host) | ssh (SLURM CLI on a
     # remote host, reached over passwordless SSH)
     transport = local
@@ -59,7 +63,7 @@ not yet implemented, see below):
     gpus =
 
     # JobServer behavior, not SLURM directives:
-    # how many jobs this instance keeps outstanding in SLURM at once
+    # how many jobs this instance keeps outstanding in this queue at once
     max_concurrent_jobs = 20
     # how many times to resubmit a job SLURM lost track of (see below)
     # before giving up and marking it "error"
@@ -70,6 +74,48 @@ let SLURM's own defaults apply.
 
 If there's exactly one section (besides ``[DEFAULT]``), it's used
 automatically and ``default =`` is optional.
+
+Multiple queues
+-----------------
+
+A config file can describe more than one queue, and a job can ask for a
+specific one via ``parameters["queue"]`` (a plain string, e.g.
+``{"cmdline": [...], "queue": "molssi10"}``) -- a JobServer instance with,
+say, ``local`` and ``molssi10`` sections can run some jobs here and dispatch
+others to a real cluster, from one process:
+
+.. code-block:: ini
+
+    [DEFAULT]
+    default = local
+
+    [local]
+    # No scheduler at all -- runs as a plain local subprocess, the same as
+    # if no ini file existed. SLURM-only keys (transport, partition,
+    # max_resubmits, ...) don't apply to a type = local section.
+    type = local
+    max_concurrent_jobs = 5
+
+    [molssi10]
+    type = slurm
+    transport = local
+    partition = batch
+    max_concurrent_jobs = 20
+
+A job that doesn't set ``parameters["queue"]`` at all uses the instance's
+default queue (``[DEFAULT] default =``, or the sole section if there's only
+one) -- existing jobs/configs from before this feature existed are
+unaffected. A job that requests a queue this instance doesn't have
+configured, or requests none at all when there's no default to fall back
+to, fails immediately as a ``startup error`` rather than silently running
+somewhere unintended.
+
+Each queue's ``max_concurrent_jobs`` is enforced independently -- one queue
+being full never blocks another from accepting new jobs. SLURM polling is
+batched per queue (one ``squeue``/``sacct`` call per distinct cluster, not
+per job), which also matters for correctness: two different clusters can
+coincidentally reuse the same SLURM job id number, and per-queue batching
+keeps those from ever being compared against each other.
 
 What happens
 ------------
@@ -97,8 +143,12 @@ local-subprocess mode. (The job still writes its own ``job_data.json`` in
 its working directory, same as always; the JobServer just reads that back
 rather than trusting the job to reach the datastore directly, which isn't
 even possible for a job dispatched to a remote host with no shared
-filesystem.) Once SLURM reports a job's state as terminal (or has no
-record of it at all), the JobServer:
+filesystem.) The JobServer also adds ``queue`` (and, for a SLURM job, its
+``slurm_job_id``) to ``job_data.json`` itself once the job finishes --
+the running flowchart process has no notion of "queue" at all, so this is
+the one place a user can see which cluster a job actually ran on. Once
+SLURM reports a job's state as terminal (or has no record of it at all),
+the JobServer:
 
 1. Trusts the job's own ``job_data.json`` if the run got far enough to
    write one, and writes that outcome (``finished``/``error``) to the
@@ -219,15 +269,14 @@ submission time.
 
 This ini format is implemented in ``seamm_slurm.config`` (not
 ``seamm_jobserver`` itself), specifically so other, more lightweight
-consumers -- a future job-submission UI, for instance -- can read and
-validate it without depending on the rest of the SEAMM stack.
+consumers can read and validate it without depending on the rest of the
+SEAMM stack -- ``seamm_webui``'s ``GET /api/queues`` (which the Tk desktop
+submit dialog's queue picker and ``.limits``-driven override fields read)
+is exactly this kind of consumer.
 
 Not yet supported
 ------------------
 
-- Routing a job to a *specific* section when a config file has more than
-  one (all jobs currently use the ``[DEFAULT]`` section) -- ``parameters
-  ["slurm"]`` is expected to gain a ``"section"`` key for this eventually.
 - Per-step SLURM submission (only whole-flowchart submission exists today).
 - A retry cap on stage-out transfer failures for a "no shared filesystem"
   section, separate from ``max_resubmits`` -- today a permanently
