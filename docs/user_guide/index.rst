@@ -68,6 +68,15 @@ see "Multiple queues" below) this JobServer instance can route jobs to:
     # how many times to resubmit a job SLURM lost track of (see below)
     # before giving up and marking it "error"
     max_resubmits = 3
+    # raw shell commands run at the top of the generated sbatch script,
+    # before run_from_jobserver -- e.g. for a queue whose own submission
+    # environment doesn't already carry whatever a code's own
+    # `installation = modules` setting (in that code's own <root>/<code>.ini)
+    # needs, such as a JobServer dispatching over a bare, non-interactive
+    # ssh connection with no MODULEPATH/Lmod set up. Blank/unset by
+    # default. Multiple commands via ini continuation lines:
+    # setup = module load ORCA
+    #     module load GCC
 
 A blank value (``account =``) means "don't pass that directive at all" --
 let SLURM's own defaults apply.

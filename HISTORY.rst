@@ -1,6 +1,14 @@
 =======
 History
 =======
+2026.8.11 -- Honor a queue's setup= shell commands before running a job
+    * A SLURM queue's new ``setup`` directive (see ``seamm_slurm``'s
+      ``2026.8.11`` release) is now prepended to the generated sbatch
+      script, before ``run_from_jobserver`` runs -- e.g. ``setup = module
+      load ORCA`` for a queue whose own submission environment doesn't
+      otherwise carry whatever a code's ``installation = modules``
+      setting needs. No effect for a queue that doesn't set it.
+
 2026.8.10 -- Route jobs to multiple queues/clusters from one JobServer instance
     * A JobServer instance can now be configured with more than one queue
       (cluster/section) in its ``<root>/<jobserver-name>.ini`` and route

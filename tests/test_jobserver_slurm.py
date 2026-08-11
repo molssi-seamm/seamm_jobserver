@@ -236,6 +236,49 @@ def test_start_job_slurm_script_has_directives_and_no_conda_activate(db_path, tm
     assert "run_from_jobserver" in script
 
 
+def test_start_job_slurm_script_has_no_setup_by_default(db_path, tmp_path):
+    wdir = tmp_path / "Job_002b"
+    wdir.mkdir()
+    insert_job(db_path, 20, "submitted", str(wdir))
+
+    js = make_jobserver(db_path, wdir)
+    js.start_job(20, str(wdir), [])
+
+    script = js._backends["molssi10"].submitted[0]
+    assert "module load" not in script
+
+
+def test_start_job_slurm_script_includes_setup_before_run_from_jobserver(
+    db_path, tmp_path
+):
+    wdir = tmp_path / "Job_002c"
+    wdir.mkdir()
+    insert_job(db_path, 21, "submitted", str(wdir))
+
+    js = make_jobserver(db_path, wdir)
+    js._sections["molssi10"].setup = "module load ORCA"
+    js.start_job(21, str(wdir), [])
+
+    script = js._backends["molssi10"].submitted[0]
+    assert "module load ORCA" in script
+    # setup runs before run_from_jobserver is invoked, not after.
+    assert script.index("module load ORCA") < script.index("run_from_jobserver")
+
+
+def test_start_job_slurm_script_includes_multiline_setup(db_path, tmp_path):
+    wdir = tmp_path / "Job_002d"
+    wdir.mkdir()
+    insert_job(db_path, 22, "submitted", str(wdir))
+
+    js = make_jobserver(db_path, wdir)
+    js._sections["molssi10"].setup = "module load ORCA\nmodule load GCC"
+    js.start_job(22, str(wdir), [])
+
+    script = js._backends["molssi10"].submitted[0]
+    assert "module load ORCA" in script
+    assert "module load GCC" in script
+
+
 def test_start_job_slurm_writes_debug_script_to_wdir(db_path, tmp_path):
     wdir = tmp_path / "Job_003"
     wdir.mkdir()

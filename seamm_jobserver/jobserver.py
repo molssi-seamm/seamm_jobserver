@@ -1627,7 +1627,9 @@ class JobServer(collections.abc.MutableMapping):
 
         cmd = self._build_cmd(job_id, effective_wdir, cmdline, queue)
         quoted_cmd = " ".join(shlex.quote(c) for c in cmd)
+        setup = f"{section.setup}\n" if section.setup else ""
         payload = (
+            f"{setup}"
             f"export SEAMM_JOB_ID={shlex.quote(str(job_id))}\n"
             f"export SEAMM_JOBSERVER={shlex.quote(self.options['name'])}\n"
             f"{quoted_cmd}\n"
