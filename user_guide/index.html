@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.8.10 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.8.11 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=7ddc0e42"></script>
+    <script src="../_static/documentation_options.js?v=d9a48a5b"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Getting Started" href="../getting_started/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.10" />
+  <meta name="docsearch:version" content="2026.8.11" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -562,6 +562,15 @@ see “Multiple queues” below) this JobServer instance can route jobs to:</p>
 <span class="c1"># how many times to resubmit a job SLURM lost track of (see below)</span>
 <span class="c1"># before giving up and marking it &quot;error&quot;</span>
 <span class="na">max_resubmits</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">3</span>
+<span class="c1"># raw shell commands run at the top of the generated sbatch script,</span>
+<span class="c1"># before run_from_jobserver -- e.g. for a queue whose own submission</span>
+<span class="c1"># environment doesn&#39;t already carry whatever a code&#39;s own</span>
+<span class="c1"># `installation = modules` setting (in that code&#39;s own &lt;root&gt;/&lt;code&gt;.ini)</span>
+<span class="c1"># needs, such as a JobServer dispatching over a bare, non-interactive</span>
+<span class="c1"># ssh connection with no MODULEPATH/Lmod set up. Blank/unset by</span>
+<span class="c1"># default. Multiple commands via ini continuation lines:</span>
+<span class="c1"># setup = module load ORCA</span>
+<span class="c1">#     module load GCC</span>
 </pre></div>
 </div>
 <p>A blank value (<code class="docutils literal notranslate"><span class="pre">account</span> <span class="pre">=</span></code>) means “don’t pass that directive at all” –
