@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import json
 import logging
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import psutil
 import shlex
 import shutil
@@ -18,11 +18,13 @@ import sys
 import time
 import traceback
 
+import fasteners
+
 import seamm_jobserver
 import seamm_util
 from seamm_slurm.config import list_sections, load_slurm_config
 from seamm_slurm.script import build_script
-from seamm_slurm.stage import StageError
+from seamm_slurm.stage import STAGE_LOCK_FILENAME, StageError
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
@@ -507,6 +509,16 @@ class JobServer(collections.abc.MutableMapping):
         with the resubmit-count logic below (which is about SLURM losing
         track of the job entirely, a different failure mode).
 
+        The pull is guarded by an ``InterProcessLock`` on
+        ``<wdir>/STAGE_LOCK_FILENAME`` -- a Dashboard may independently
+        pull this same job's files on demand while it's still running
+        (same ``remote_wdir``, recomputed via ``SlurmSection.
+        remote_wdir_for()``), and the two must not run ``rsync`` against
+        the same destination concurrently. A failure to acquire the lock
+        promptly is treated the same as a transfer failure: log and retry
+        next cycle, rather than blocking this poll cycle indefinitely on
+        someone else's in-flight sync.
+
         First choice: trust ``job_data.json`` if the flowchart's own process
         managed to write one -- this is the common case (a normal finish),
         not just a stalled-job fallback, since the JobServer is now the
@@ -531,6 +543,14 @@ class JobServer(collections.abc.MutableMapping):
         section = self._sections[queue]
 
         if remote_wdir is not None:
+            lock = fasteners.InterProcessLock(str(Path(wdir) / STAGE_LOCK_FILENAME))
+            if not lock.acquire(blocking=True, timeout=5):
+                self.logger.warning(
+                    f"Job {job_id}: could not acquire the stage lock for "
+                    f"{wdir} (a concurrent sync in progress?), will retry "
+                    "next poll cycle."
+                )
+                return True
             try:
                 self._stagers[queue].stage_out(remote_wdir, wdir)
             except StageError as e:
@@ -539,6 +559,8 @@ class JobServer(collections.abc.MutableMapping):
                     f"will retry next poll cycle: {e}"
                 )
                 return True
+            finally:
+                lock.release()
 
         state = self._read_job_data_state(wdir)
         if state is not None:
@@ -1573,16 +1595,17 @@ class JobServer(collections.abc.MutableMapping):
         should run in, derived from its local working directory's name and
         the queue's ``remote_root``. Deterministic across resubmits --
         job directory names (``Job_NNNNNN``) are unique across the whole
-        datastore, not just within a project, so no collision risk."""
+        datastore, not just within a project, so no collision risk.
+
+        Thin wrapper around ``SlurmSection.remote_wdir_for()`` (the shared
+        formula, also usable independently by anything else that knows a
+        job's local wdir and this section's config -- e.g. a Dashboard
+        pulling a still-running job's files back on demand) -- kept here
+        for the ``queue=None`` default-queue convenience the two call
+        sites below rely on."""
         queue = queue or self._default_queue
         section = self._sections[queue]
-        if not section.remote_root:
-            raise RuntimeError(
-                f"SLURM queue '{section.name}' has transport=ssh but "
-                "no remote_root is set -- can't determine where to stage "
-                f"jobs on {section.host}."
-            )
-        return str(PurePosixPath(section.remote_root) / Path(wdir).name)
+        return section.remote_wdir_for(wdir)
 
     def _start_job_slurm(
         self, job_id, wdir, cmdline, queue=None, resubmit_count=0, slurm_overrides=None
