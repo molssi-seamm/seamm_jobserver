@@ -1,5 +1,6 @@
 seamm
 seamm_slurm
 psutil
+fasteners
 
 

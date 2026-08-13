@@ -1,6 +1,23 @@
 =======
 History
 =======
+2026.8.13 -- Internal: lock a remote job's files before pulling them back
+    * The end-of-run pull of a ``transport = ssh`` job's remote files is
+      now guarded by an inter-process file lock in the job's own working
+      directory, so it can't run concurrently with another process
+      independently pulling the same job's files (e.g. a Dashboard
+      syncing a still-running job's files on demand) -- a lock-contention
+      failure is treated the same as a transient transfer failure and
+      retried next poll cycle.
+    * ``_remote_wdir()`` now delegates to ``seamm_slurm``'s new
+      ``SlurmSection.remote_wdir_for()`` (requires ``seamm_slurm >=
+      2026.8.13``) instead of computing the path inline, so this
+      JobServer and any other caller (e.g. a Dashboard) can't compute a
+      job's remote path differently.
+    * New dependency: ``fasteners`` (already used elsewhere in the SEAMM
+      stack, e.g. ``seamm_webui``'s own file-locking).
+    * No user-visible behavior change.
+
 2026.8.11 -- Honor a queue's setup= shell commands before running a job
     * A SLURM queue's new ``setup`` directive (see ``seamm_slurm``'s
       ``2026.8.11`` release) is now prepended to the generated sbatch

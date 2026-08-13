@@ -741,6 +741,46 @@ def test_finished_jobs_ssh_stage_out_failure_retries_next_cycle(db_path, tmp_pat
     assert 1 not in js._jobs
 
 
+def test_finished_jobs_ssh_stage_out_lock_contention_retries_next_cycle(
+    db_path, tmp_path
+):
+    """A concurrent sync (e.g. a Dashboard pulling this same job's files on
+    demand) holding the stage lock must be treated the same as a transfer
+    failure: retry next cycle, don't finalize, don't touch stage_out at
+    all. Mocks fasteners.InterProcessLock.acquire() directly rather than
+    genuinely contending an OS lock across threads/processes, so this
+    stays a fast, deterministic unit test."""
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+    (wdir / "job_data.json").write_text('!MolSSI job_data 1.0\n{"state": "finished"}\n')
+
+    js = make_ssh_jobserver(db_path)
+    js._jobs[1] = {
+        "mode": "slurm",
+        "slurm_job_id": "42",
+        "wdir": str(wdir),
+        "remote_wdir": "/remote/scratch/Job_1",
+        "cmdline": ["run_from_jobserver"],
+        "resubmit_count": 0,
+    }
+    js._times[1] = {}
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="COMPLETED", category="completed", exit_code="0:0"
+    )
+
+    fake_lock = mock.MagicMock()
+    fake_lock.acquire.return_value = False
+    with mock.patch(
+        "seamm_jobserver.jobserver.fasteners.InterProcessLock", return_value=fake_lock
+    ):
+        js.check_for_finished_jobs()
+
+    assert get_job(db_path, 1)[0] == "running"
+    assert 1 in js._jobs
+    assert js._stagers["molssi10"].staged_out == []
+
+
 def test_reattach_ssh_still_running_job_recomputes_remote_wdir(db_path, tmp_path):
     wdir = tmp_path / "Job_1"
     wdir.mkdir()
