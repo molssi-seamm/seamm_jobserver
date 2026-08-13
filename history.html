@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.8.11 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.8.13 documentation</title>
   
   
   
@@ -49,7 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=d9a48a5b"></script>
+    <script src="_static/documentation_options.js?v=4a248428"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Credits" href="authors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.11" />
+  <meta name="docsearch:version" content="2026.8.13" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -506,6 +506,24 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.8.13 – Internal: lock a remote job’s files before pulling them back</dt><dd><ul class="simple">
+<li><p>The end-of-run pull of a <code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> job’s remote files is
+now guarded by an inter-process file lock in the job’s own working
+directory, so it can’t run concurrently with another process
+independently pulling the same job’s files (e.g. a Dashboard
+syncing a still-running job’s files on demand) – a lock-contention
+failure is treated the same as a transient transfer failure and
+retried next poll cycle.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_remote_wdir()</span></code> now delegates to <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>’s new
+<code class="docutils literal notranslate"><span class="pre">SlurmSection.remote_wdir_for()</span></code> (requires <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span> <span class="pre">&gt;=</span>
+<span class="pre">2026.8.13</span></code>) instead of computing the path inline, so this
+JobServer and any other caller (e.g. a Dashboard) can’t compute a
+job’s remote path differently.</p></li>
+<li><p>New dependency: <code class="docutils literal notranslate"><span class="pre">fasteners</span></code> (already used elsewhere in the SEAMM
+stack, e.g. <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>’s own file-locking).</p></li>
+<li><p>No user-visible behavior change.</p></li>
+</ul>
+</dd>
 <dt>2026.8.11 – Honor a queue’s setup= shell commands before running a job</dt><dd><ul class="simple">
 <li><p>A SLURM queue’s new <code class="docutils literal notranslate"><span class="pre">setup</span></code> directive (see <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>’s
 <code class="docutils literal notranslate"><span class="pre">2026.8.11</span></code> release) is now prepended to the generated sbatch

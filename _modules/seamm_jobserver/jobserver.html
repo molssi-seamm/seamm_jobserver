@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.8.11 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.8.13 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=d9a48a5b"></script>
+    <script src="../../_static/documentation_options.js?v=4a248428"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -61,7 +61,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="search" title="Search" href="../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.8.11" />
+  <meta name="docsearch:version" content="2026.8.13" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -495,7 +495,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span><span class="p">,</span> <span class="n">PurePosixPath</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">psutil</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">shlex</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
@@ -506,11 +506,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">traceback</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">fasteners</span>
+
 <span class="kn">import</span><span class="w"> </span><span class="nn">seamm_jobserver</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">seamm_util</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_slurm.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">list_sections</span><span class="p">,</span> <span class="n">load_slurm_config</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_slurm.script</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_script</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_slurm.stage</span><span class="w"> </span><span class="kn">import</span> <span class="n">StageError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_slurm.stage</span><span class="w"> </span><span class="kn">import</span> <span class="n">STAGE_LOCK_FILENAME</span><span class="p">,</span> <span class="n">StageError</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 <span class="c1"># logger.setLevel(logging.DEBUG)</span>
@@ -1015,6 +1017,16 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="sd">        with the resubmit-count logic below (which is about SLURM losing</span>
 <span class="sd">        track of the job entirely, a different failure mode).</span>
 
+<span class="sd">        The pull is guarded by an ``InterProcessLock`` on</span>
+<span class="sd">        ``&lt;wdir&gt;/STAGE_LOCK_FILENAME`` -- a Dashboard may independently</span>
+<span class="sd">        pull this same job&#39;s files on demand while it&#39;s still running</span>
+<span class="sd">        (same ``remote_wdir``, recomputed via ``SlurmSection.</span>
+<span class="sd">        remote_wdir_for()``), and the two must not run ``rsync`` against</span>
+<span class="sd">        the same destination concurrently. A failure to acquire the lock</span>
+<span class="sd">        promptly is treated the same as a transfer failure: log and retry</span>
+<span class="sd">        next cycle, rather than blocking this poll cycle indefinitely on</span>
+<span class="sd">        someone else&#39;s in-flight sync.</span>
+
 <span class="sd">        First choice: trust ``job_data.json`` if the flowchart&#39;s own process</span>
 <span class="sd">        managed to write one -- this is the common case (a normal finish),</span>
 <span class="sd">        not just a stalled-job fallback, since the JobServer is now the</span>
@@ -1039,6 +1051,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="n">section</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sections</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span>
 
         <span class="k">if</span> <span class="n">remote_wdir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">lock</span> <span class="o">=</span> <span class="n">fasteners</span><span class="o">.</span><span class="n">InterProcessLock</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span> <span class="o">/</span> <span class="n">STAGE_LOCK_FILENAME</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">lock</span><span class="o">.</span><span class="n">acquire</span><span class="p">(</span><span class="n">blocking</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: could not acquire the stage lock for &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">wdir</span><span class="si">}</span><span class="s2"> (a concurrent sync in progress?), will retry &quot;</span>
+                    <span class="s2">&quot;next poll cycle.&quot;</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">True</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_stagers</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">stage_out</span><span class="p">(</span><span class="n">remote_wdir</span><span class="p">,</span> <span class="n">wdir</span><span class="p">)</span>
             <span class="k">except</span> <span class="n">StageError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -1047,6 +1067,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <span class="sa">f</span><span class="s2">&quot;will retry next poll cycle: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="p">)</span>
                 <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="n">lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
 
         <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_job_data_state</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -2117,16 +2139,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="sd">        should run in, derived from its local working directory&#39;s name and</span>
 <span class="sd">        the queue&#39;s ``remote_root``. Deterministic across resubmits --</span>
 <span class="sd">        job directory names (``Job_NNNNNN``) are unique across the whole</span>
-<span class="sd">        datastore, not just within a project, so no collision risk.&quot;&quot;&quot;</span>
+<span class="sd">        datastore, not just within a project, so no collision risk.</span>
+
+<span class="sd">        Thin wrapper around ``SlurmSection.remote_wdir_for()`` (the shared</span>
+<span class="sd">        formula, also usable independently by anything else that knows a</span>
+<span class="sd">        job&#39;s local wdir and this section&#39;s config -- e.g. a Dashboard</span>
+<span class="sd">        pulling a still-running job&#39;s files back on demand) -- kept here</span>
+<span class="sd">        for the ``queue=None`` default-queue convenience the two call</span>
+<span class="sd">        sites below rely on.&quot;&quot;&quot;</span>
         <span class="n">queue</span> <span class="o">=</span> <span class="n">queue</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_default_queue</span>
         <span class="n">section</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sections</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">section</span><span class="o">.</span><span class="n">remote_root</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;SLURM queue &#39;</span><span class="si">{</span><span class="n">section</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; has transport=ssh but &quot;</span>
-                <span class="s2">&quot;no remote_root is set -- can&#39;t determine where to stage &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;jobs on </span><span class="si">{</span><span class="n">section</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2">.&quot;</span>
-            <span class="p">)</span>
-        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">PurePosixPath</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">remote_root</span><span class="p">)</span> <span class="o">/</span> <span class="n">Path</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">section</span><span class="o">.</span><span class="n">remote_wdir_for</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_start_job_slurm</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">resubmit_count</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="o">=</span><span class="kc">None</span>
