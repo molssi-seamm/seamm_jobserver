@@ -1,6 +1,13 @@
 =======
 History
 =======
+2026.9.27 -- Bugfix: jobs use the JobServer's installation
+    * The JobServer did not tell a job which SEAMM installation it belonged to, so the
+      job used ``~/SEAMM``'s configuration: a JobServer for ``~/SEAMM_DEV`` ran its
+      jobs with ``~/SEAMM``'s ``mopac.ini``, ``lammps.ini`` and data. Jobs now get the
+      JobServer's ``--root``, for local queues and SLURM queues on the same machine.
+      Queues reached over ssh are unchanged, since the remote host has its own root.
+
 2026.8.13 -- Internal: lock a remote job's files before pulling them back
     * The end-of-run pull of a ``transport = ssh`` job's remote files is
       now guarded by an inter-process file lock in the job's own working

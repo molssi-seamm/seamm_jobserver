@@ -10,6 +10,7 @@ isolation; these tests cover how JobServer *uses* it.
 """
 
 import json
+from pathlib import Path
 import sqlite3
 from unittest import mock
 
@@ -1872,3 +1873,33 @@ def test_load_queue_config_mixed_local_and_slurm_sections(tmp_path):
     assert set(js._backends) == {"cluster"}  # no backend for the local-type one
     assert set(js._stagers) == {"cluster"}
     assert js._sections["local"].max_concurrent_jobs == 4
+
+
+# ---- the job gets the JobServer's root -----------------------------------
+
+
+def test_build_cmd_passes_root_locally(db_path, tmp_path):
+    js = make_local_jobserver(db_path)
+    js.seamm_options = {"root": "~/SEAMM_DEV"}
+    cmd = js._build_cmd(7, tmp_path, ["--flag", "x"])
+    i = cmd.index("--root")
+    assert cmd[i + 1] == str(Path("~/SEAMM_DEV").expanduser())
+    assert cmd[-2:] == ["--flag", "x"]  # the job's own options come after
+
+
+def test_build_cmd_passes_root_for_on_cluster_slurm(db_path, tmp_path):
+    js = make_jobserver(db_path, tmp_path)
+    js.seamm_options = {"root": "/cluster/SEAMM"}
+    cmd = js._build_cmd(7, tmp_path, [])
+    assert cmd[cmd.index("--root") + 1] == "/cluster/SEAMM"
+
+
+def test_build_cmd_no_root_over_ssh(db_path, tmp_path):
+    js = make_ssh_jobserver(db_path)
+    js.seamm_options = {"root": "/Users/me/SEAMM"}
+    assert "--root" not in js._build_cmd(7, "/remote/scratch/Job_7", [])
+
+
+def test_build_cmd_without_options(db_path, tmp_path):
+    js = make_local_jobserver(db_path)
+    assert "--root" not in js._build_cmd(7, tmp_path, [])

@@ -1522,6 +1522,16 @@ class JobServer(collections.abc.MutableMapping):
                 cmd.append("--executor")
                 cmd.append("docker")
 
+        # The job must use this JobServer's installation: its code .ini files,
+        # data and configuration live under the root. Without --root the job
+        # fell back to ~/SEAMM, so a JobServer for ~/SEAMM_DEV ran its jobs
+        # with ~/SEAMM's configuration. Not for a transport=ssh queue, whose
+        # remote host has its own root.
+        root = (self.seamm_options or {}).get("root")
+        if root and (section is None or section.transport != "ssh"):
+            cmd.append("--root")
+            cmd.append(str(Path(root).expanduser()))
+
         # Environment variable for debug output
         if "SEAMM_LOG_LEVEL" in os.environ:
             cmd.append("--log-level")
