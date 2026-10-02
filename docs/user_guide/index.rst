@@ -276,7 +276,7 @@ for every attempt -- it isn't re-validated against a config that might have
 changed in the meantime, since the section was already validated against at
 submission time.
 
-This ini format is implemented in ``seamm_slurm.config`` (not
+This ini format is implemented in ``seamm_scheduler.config`` (not
 ``seamm_jobserver`` itself), specifically so other, more lightweight
 consumers can read and validate it without depending on the rest of the
 SEAMM stack -- ``seamm_webui``'s ``GET /api/queues`` (which the Tk desktop

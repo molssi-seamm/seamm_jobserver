@@ -1,5 +1,5 @@
 seamm
-seamm_slurm
+seamm_scheduler
 psutil
 fasteners
 
