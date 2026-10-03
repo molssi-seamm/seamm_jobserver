@@ -1918,7 +1918,7 @@ def test_start_job_writes_no_target_for_an_old_section(db_path, tmp_path):
 
 
 def test_start_job_writes_the_target_for_a_task_section(db_path, tmp_path):
-    from seamm_exec.targets import find_target
+    from seamm_scheduler import TargetSection
 
     wdir = tmp_path / "Job_011"
     wdir.mkdir()
@@ -1930,8 +1930,8 @@ def test_start_job_writes_the_target_for_a_task_section(db_path, tmp_path):
     js.start_job(11, str(wdir), [])
     data = json.loads((wdir / "target.json").read_text())
     assert data["name"] == "molssi10" and data["tasks"] == "queue"
-    # The evaluator reads back the same section.
-    assert find_target(job_directory=wdir) == section
+    # The evaluator (seamm_exec.targets) reads back the same section.
+    assert TargetSection.from_settings(data) == section
 
 
 def test_start_job_ssh_writes_the_target_before_staging(db_path, tmp_path):

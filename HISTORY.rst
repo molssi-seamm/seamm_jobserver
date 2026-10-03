@@ -1,6 +1,19 @@
 =======
 History
 =======
+
+2026.10.2 -- Targets for the task layer
+    * A queue section may now also say where a job's *tasks* run, with ``tasks =``
+      and its companion keys (see ``seamm_exec``). For such a section the JobServer
+      writes the section into the job's directory as ``target.json`` when the job
+      starts, before staging for a remote queue, so the flowchart finds it wherever
+      it runs. Sections without ``tasks =`` write nothing and behave as before.
+    * A section with ``type = local`` and ``transport = ssh`` runs its flowchart
+      locally; its transport says how its tasks reach a cluster.
+    * Uses ``seamm_scheduler`` (2026.10.2), the generalization of ``seamm_slurm``,
+      for the queue configuration, scripts and staging.
+    * The shared CI now runs on uv: ``devtools/conda-envs/test_env.yaml`` is
+      removed, so ``requirements.txt`` is the one dependency list.
 2026.9.27 -- Bugfix: jobs use the JobServer's installation
     * The JobServer did not tell a job which SEAMM installation it belonged to, so the
       job used ``~/SEAMM``'s configuration: a JobServer for ``~/SEAMM_DEV`` ran its
