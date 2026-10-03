@@ -276,7 +276,22 @@ for every attempt -- it isn't re-validated against a config that might have
 changed in the meantime, since the section was already validated against at
 submission time.
 
-This ini format is implemented in ``seamm_slurm.config`` (not
+Where a job's tasks run
+------------------------
+
+A section may also say where the *tasks* of a job's flowchart run -- the
+individual calculations that steps hand to ``seamm_exec``'s task layer -- with
+the optional key ``tasks = pool | queue`` and its companions (``scheduler``,
+``bundle_tasks``, ``bundle_walltime``, ``max_queued_tasks``, ``remote_python``,
+...; see ``seamm_exec``'s getting-started guide). When a section has
+``tasks =``, the JobServer writes it into the job's directory as
+``target.json`` when the job starts (before staging, for a remote queue), and
+the flowchart finds it there wherever it runs. A section without ``tasks =``
+writes nothing and behaves exactly as before. Because ``target.json`` is a
+copy of the section, ``setup`` text included, in a directory the Dashboard
+shows, a section must never hold secrets.
+
+This ini format is implemented in ``seamm_scheduler.config`` (not
 ``seamm_jobserver`` itself), specifically so other, more lightweight
 consumers can read and validate it without depending on the rest of the
 SEAMM stack -- ``seamm_webui``'s ``GET /api/queues`` (which the Tk desktop

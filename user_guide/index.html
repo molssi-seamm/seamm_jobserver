@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.9.27 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.10.2 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=09c3d259"></script>
+    <script src="../_static/documentation_options.js?v=52372788"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Getting Started" href="../getting_started/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.9.27" />
+  <meta name="docsearch:version" content="2026.10.2" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -751,7 +751,21 @@ requested, or with the override silently dropped.</p>
 for every attempt – it isn’t re-validated against a config that might have
 changed in the meantime, since the section was already validated against at
 submission time.</p>
-<p>This ini format is implemented in <code class="docutils literal notranslate"><span class="pre">seamm_slurm.config</span></code> (not
+</section>
+<section id="where-a-job-s-tasks-run">
+<h3>Where a job’s tasks run<a class="headerlink" href="#where-a-job-s-tasks-run" title="Link to this heading">#</a></h3>
+<p>A section may also say where the <em>tasks</em> of a job’s flowchart run – the
+individual calculations that steps hand to <code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code>’s task layer – with
+the optional key <code class="docutils literal notranslate"><span class="pre">tasks</span> <span class="pre">=</span> <span class="pre">pool</span> <span class="pre">|</span> <span class="pre">queue</span></code> and its companions (<code class="docutils literal notranslate"><span class="pre">scheduler</span></code>,
+<code class="docutils literal notranslate"><span class="pre">bundle_tasks</span></code>, <code class="docutils literal notranslate"><span class="pre">bundle_walltime</span></code>, <code class="docutils literal notranslate"><span class="pre">max_queued_tasks</span></code>, <code class="docutils literal notranslate"><span class="pre">remote_python</span></code>,
+…; see <code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code>’s getting-started guide). When a section has
+<code class="docutils literal notranslate"><span class="pre">tasks</span> <span class="pre">=</span></code>, the JobServer writes it into the job’s directory as
+<code class="docutils literal notranslate"><span class="pre">target.json</span></code> when the job starts (before staging, for a remote queue), and
+the flowchart finds it there wherever it runs. A section without <code class="docutils literal notranslate"><span class="pre">tasks</span> <span class="pre">=</span></code>
+writes nothing and behaves exactly as before. Because <code class="docutils literal notranslate"><span class="pre">target.json</span></code> is a
+copy of the section, <code class="docutils literal notranslate"><span class="pre">setup</span></code> text included, in a directory the Dashboard
+shows, a section must never hold secrets.</p>
+<p>This ini format is implemented in <code class="docutils literal notranslate"><span class="pre">seamm_scheduler.config</span></code> (not
 <code class="docutils literal notranslate"><span class="pre">seamm_jobserver</span></code> itself), specifically so other, more lightweight
 consumers can read and validate it without depending on the rest of the
 SEAMM stack – <code class="docutils literal notranslate"><span class="pre">seamm_webui</span></code>’s <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/queues</span></code> (which the Tk desktop
@@ -855,6 +869,7 @@ tracking or, worse, resubmitting it as if it had merely gone missing.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-happens">What happens</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#no-shared-filesystem">No shared filesystem</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-job-resource-overrides">Per-job resource overrides</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#where-a-job-s-tasks-run">Where a job’s tasks run</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#not-yet-supported">Not yet supported</a></li>
 </ul>
 </li>

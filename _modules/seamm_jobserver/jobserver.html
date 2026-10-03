@@ -6,7 +6,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.9.27 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.2 documentation</title>
   
   
   
@@ -47,7 +47,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=09c3d259"></script>
+    <script src="../../_static/documentation_options.js?v=52372788"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="search" title="Search" href="../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.9.27" />
+  <meta name="docsearch:version" content="2026.10.2" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -509,9 +509,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">seamm_jobserver</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">seamm_util</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_slurm.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">list_sections</span><span class="p">,</span> <span class="n">load_slurm_config</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_slurm.script</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_script</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_slurm.stage</span><span class="w"> </span><span class="kn">import</span> <span class="n">STAGE_LOCK_FILENAME</span><span class="p">,</span> <span class="n">StageError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">list_sections</span><span class="p">,</span> <span class="n">load_slurm_config</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.script</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_script</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.stage</span><span class="w"> </span><span class="kn">import</span> <span class="n">STAGE_LOCK_FILENAME</span><span class="p">,</span> <span class="n">StageError</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 <span class="c1"># logger.setLevel(logging.DEBUG)</span>
@@ -2010,6 +2010,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         <span class="n">section</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sections</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span> <span class="k">if</span> <span class="n">queue</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
 
+        <span class="c1"># A target that says where the evaluator's tasks run is written into</span>
+        <span class="c1"># the job directory, where the evaluator finds it wherever it runs</span>
+        <span class="c1"># (staged with the job for a remote SLURM queue). Sections without</span>
+        <span class="c1"># the task keys write nothing, as before.</span>
+        <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">tasks</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_write_target</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="n">wdir</span><span class="p">)</span>
+
         <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"slurm"</span><span class="p">:</span>
             <span class="c1"># _start_job_slurm builds the command itself, after staging</span>
             <span class="c1"># (transport=ssh) determines the *effective* working directory</span>
@@ -2026,6 +2033,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_start_job_local</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">queue</span><span class="p">)</span></div>
 
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_write_target</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">section</span><span class="p">,</span> <span class="n">wdir</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Write ``&lt;job dir&gt;/target.json`` for the evaluator (see</span>
+<span class="sd">        ``seamm_exec.targets``)."""</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span> <span class="o">/</span> <span class="s2">"target.json"</span>
+        <span class="n">tmp</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">with_name</span><span class="p">(</span><span class="s2">"target.json.tmp"</span><span class="p">)</span>
+        <span class="n">tmp</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">task_settings</span><span class="p">(),</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tmp</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_build_cmd</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Build the ``run_from_jobserver`` command line for a job -- the</span>
 <span class="sd">        same command whether it's about to be run as a local subprocess or</span>
@@ -2038,8 +2053,16 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="sd">        this)."""</span>
         <span class="n">queue</span> <span class="o">=</span> <span class="n">queue</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_default_queue</span>
         <span class="n">section</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sections</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span> <span class="k">if</span> <span class="n">queue</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="c1"># Whether the evaluator itself runs on a remote host. A type=local</span>
+        <span class="c1"># section runs it here whatever its transport, which then only says</span>
+        <span class="c1"># how its *tasks* reach a cluster.</span>
+        <span class="n">remote</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"slurm"</span>
+            <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">"ssh"</span>
+        <span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">"ssh"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">remote</span><span class="p">:</span>
             <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remote_exe_prefix</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">path</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">executable</span>
@@ -2055,7 +2078,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="c1"># (local mode, or an on-cluster SLURM JobServer) -- this inspects</span>
         <span class="c1"># *this* host, which is irrelevant for a transport=ssh queue</span>
         <span class="c1"># running on a different host entirely.</span>
-        <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">section</span><span class="o">.</span><span class="n">transport</span> <span class="o">!=</span> <span class="s2">"ssh"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">remote</span><span class="p">:</span>
             <span class="n">cgroup</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">"/proc/self/cgroup"</span><span class="p">)</span>
             <span class="k">if</span> <span class="p">(</span>
                 <span class="n">Path</span><span class="p">(</span><span class="s2">"/.dockerenv"</span><span class="p">)</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span>
@@ -2071,7 +2094,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="c1"># with ~/SEAMM's configuration. Not for a transport=ssh queue, whose</span>
         <span class="c1"># remote host has its own root.</span>
         <span class="n">root</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seamm_options</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"root"</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">root</span> <span class="ow">and</span> <span class="p">(</span><span class="n">section</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">section</span><span class="o">.</span><span class="n">transport</span> <span class="o">!=</span> <span class="s2">"ssh"</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">root</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">remote</span><span class="p">:</span>
             <span class="n">cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"--root"</span><span class="p">)</span>
             <span class="n">cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">root</span><span class="p">)</span><span class="o">.</span><span class="n">expanduser</span><span class="p">()))</span>
 

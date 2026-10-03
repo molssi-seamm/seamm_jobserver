@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.9.27 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.10.2 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=09c3d259"></script>
+    <script src="_static/documentation_options.js?v=52372788"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -62,7 +62,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Credits" href="authors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.9.27" />
+  <meta name="docsearch:version" content="2026.10.2" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -505,6 +505,20 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.10.2 – Targets for the task layer</dt><dd><ul class="simple">
+<li><p>A queue section may now also say where a job’s <em>tasks</em> run, with <code class="docutils literal notranslate"><span class="pre">tasks</span> <span class="pre">=</span></code>
+and its companion keys (see <code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code>). For such a section the JobServer
+writes the section into the job’s directory as <code class="docutils literal notranslate"><span class="pre">target.json</span></code> when the job
+starts, before staging for a remote queue, so the flowchart finds it wherever
+it runs. Sections without <code class="docutils literal notranslate"><span class="pre">tasks</span> <span class="pre">=</span></code> write nothing and behave as before.</p></li>
+<li><p>A section with <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">local</span></code> and <code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> runs its flowchart
+locally; its transport says how its tasks reach a cluster.</p></li>
+<li><p>Uses <code class="docutils literal notranslate"><span class="pre">seamm_scheduler</span></code> (2026.10.2), the generalization of <code class="docutils literal notranslate"><span class="pre">seamm_slurm</span></code>,
+for the queue configuration, scripts and staging.</p></li>
+<li><p>The shared CI now runs on uv: <code class="docutils literal notranslate"><span class="pre">devtools/conda-envs/test_env.yaml</span></code> is
+removed, so <code class="docutils literal notranslate"><span class="pre">requirements.txt</span></code> is the one dependency list.</p></li>
+</ul>
+</dd>
 <dt>2026.9.27 – Bugfix: jobs use the JobServer’s installation</dt><dd><ul class="simple">
 <li><p>The JobServer did not tell a job which SEAMM installation it belonged to, so the
 job used <code class="docutils literal notranslate"><span class="pre">~/SEAMM</span></code>’s configuration: a JobServer for <code class="docutils literal notranslate"><span class="pre">~/SEAMM_DEV</span></code> ran its
