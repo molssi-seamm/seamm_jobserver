@@ -287,7 +287,9 @@ the optional key ``tasks = pool | queue`` and its companions (``scheduler``,
 ``tasks =``, the JobServer writes it into the job's directory as
 ``target.json`` when the job starts (before staging, for a remote queue), and
 the flowchart finds it there wherever it runs. A section without ``tasks =``
-writes nothing and behaves exactly as before.
+writes nothing and behaves exactly as before. Because ``target.json`` is a
+copy of the section, ``setup`` text included, in a directory the Dashboard
+shows, a section must never hold secrets.
 
 This ini format is implemented in ``seamm_scheduler.config`` (not
 ``seamm_jobserver`` itself), specifically so other, more lightweight
