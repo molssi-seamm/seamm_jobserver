@@ -2,6 +2,18 @@
 History
 =======
 
+2026.10.3 -- Flowcharts as PBS jobs
+    * A queue with ``type = queue`` and ``scheduler = pbs`` runs each flowchart as a
+      PBS job (``type = slurm``, or ``type = queue`` with ``scheduler = slurm``, for
+      SLURM). PBS's own directives (``queue``, ``walltime``, ``select``) or the SLURM
+      spellings may be used, and a job's overrides (e.g. ``ntasks``, ``mem``) reach
+      the ``select``.
+    * The job's output is ``pbs.out`` in the job directory. Like SLURM's default,
+      the job gets the JobServer's environment unless the queue sets
+      ``export = NONE``.
+    * Requires seamm_scheduler 2026.10.3 or later, also on the host where the
+      flowchart runs.
+
 2026.10.2 -- Targets for the task layer
     * A queue section may now also say where a job's *tasks* run, with ``tasks =``
       and its companion keys (see ``seamm_exec``). For such a section the JobServer
