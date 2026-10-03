@@ -1697,6 +1697,10 @@ class JobServer(collections.abc.MutableMapping):
             # unless the section says export = NONE; and portable spellings
             # (time, partition, dependency) become the scheduler's own.
             directives.setdefault("export", "ALL")
+            # PBS writes the job's output where it was submitted (the home
+            # directory over ssh); put it in the job directory, staged back.
+            for key, value in scheduler.log_directives(effective_wdir).items():
+                directives.setdefault(key, value)
             directives = scheduler.directives({}, directives)
         script = build_script(directives, payload, scheduler=scheduler)
 

@@ -2000,8 +2000,10 @@ def test_start_job_pbs_script(db_path, tmp_path):
     assert "#PBS -N seamm-3" in lines
     assert "#PBS -l walltime=01:00:00" in lines
     assert "#PBS -V" in lines
-    assert f"cd {wdir}" in lines
-    assert lines.index(f"cd {wdir}") < next(
+    assert f"#PBS -o {wdir}/pbs.out" in lines
+    assert "#PBS -j oe" in lines
+    assert f"cd {wdir} || exit 1" in lines
+    assert lines.index(f"cd {wdir} || exit 1") < next(
         i for i, line in enumerate(lines) if "run_from_jobserver" in line
     )
 
@@ -2022,3 +2024,27 @@ def test_start_job_pbs_export_none(db_path, tmp_path):
     )
     js.start_job(4, str(wdir), [])
     assert "#PBS -V" not in js._backends["molssi10"].submitted[0]
+
+
+def test_start_job_pbs_overrides_reach_the_select(db_path, tmp_path):
+    """A job's ntasks/mem overrides (SLURM spellings) become the PBS select."""
+    wdir = tmp_path / "Job_005"
+    wdir.mkdir()
+    insert_job(db_path, 5, "submitted", str(wdir))
+
+    js = make_jobserver(db_path, wdir)
+    js._sections["molssi10"] = SlurmSection(
+        name="molssi10",
+        transport="local",
+        host=None,
+        type="queue",
+        scheduler="pbs",
+        directives={"queue": "workq", "select": "1:ncpus=1:mem=20gb"},
+        limits={
+            "ntasks": FieldLimits(minimum="1", maximum="6"),
+            "mem": FieldLimits(maximum="40G"),
+        },
+    )
+    js.start_job(5, str(wdir), [], slurm_overrides={"ntasks": 6, "mem": "8G"})
+    script = js._backends["molssi10"].submitted[0]
+    assert "#PBS -l select=1:ncpus=6:mem=8192mb:mpiprocs=6" in script.splitlines()
