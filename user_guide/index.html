@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.10.2 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.10.3 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=52372788"></script>
+    <script src="../_static/documentation_options.js?v=f64fa391"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Getting Started" href="../getting_started/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.2" />
+  <meta name="docsearch:version" content="2026.10.3" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -601,6 +601,33 @@ others to a real cluster, from one process:</p>
 <span class="na">max_concurrent_jobs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">20</span>
 </pre></div>
 </div>
+</section>
+<section id="pbs-queues">
+<h3>PBS queues<a class="headerlink" href="#pbs-queues" title="Link to this heading">#</a></h3>
+<p>A section with <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">queue</span></code> runs each flowchart as a batch job on the
+queueing system named by <code class="docutils literal notranslate"><span class="pre">scheduler</span></code> – <code class="docutils literal notranslate"><span class="pre">slurm</span></code> (the default; <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span>
+<span class="pre">slurm</span></code> is the original spelling of this) or <code class="docutils literal notranslate"><span class="pre">pbs</span></code> (PBS Professional and
+OpenPBS):</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[molssi10]</span>
+<span class="na">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">queue</span>
+<span class="na">scheduler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">pbs</span>
+<span class="na">transport</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ssh</span>
+<span class="na">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">molssi10</span>
+<span class="na">remote_root</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">/home/psaxe/seamm_jobs</span>
+<span class="na">remote_run_from_jobserver</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">/home/psaxe/SEAMM/venv/bin/run_from_jobserver</span>
+<span class="na">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">workq</span>
+<span class="na">walltime</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">01:00:00</span>
+<span class="na">select</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1:ncpus=1:mem=20gb</span>
+</pre></div>
+</div>
+<p>PBS’s own directives (<code class="docutils literal notranslate"><span class="pre">queue</span></code>, <code class="docutils literal notranslate"><span class="pre">walltime</span></code>, <code class="docutils literal notranslate"><span class="pre">select</span></code>, …) or the SLURM
+spellings (<code class="docutils literal notranslate"><span class="pre">partition</span></code>, <code class="docutils literal notranslate"><span class="pre">time</span></code>, <code class="docutils literal notranslate"><span class="pre">ntasks</span></code>, <code class="docutils literal notranslate"><span class="pre">mem</span></code>, …) may be used, and a
+job’s own overrides (e.g. <code class="docutils literal notranslate"><span class="pre">ntasks</span></code>, <code class="docutils literal notranslate"><span class="pre">mem</span></code>) are merged into the <code class="docutils literal notranslate"><span class="pre">select</span></code>.
+The job’s output goes to <code class="docutils literal notranslate"><span class="pre">pbs.out</span></code> in the job directory. Like SLURM’s default,
+the job gets the JobServer’s environment unless the section sets
+<code class="docutils literal notranslate"><span class="pre">export</span> <span class="pre">=</span> <span class="pre">NONE</span></code>, in which case use an absolute <code class="docutils literal notranslate"><span class="pre">remote_run_from_jobserver</span></code>
+(<code class="docutils literal notranslate"><span class="pre">remote_conda_env</span></code> needs <code class="docutils literal notranslate"><span class="pre">conda</span></code> on the <code class="docutils literal notranslate"><span class="pre">PATH</span></code>). The host running the
+flowchart needs <code class="docutils literal notranslate"><span class="pre">seamm_scheduler</span></code> 2026.10.3 or later.</p>
 <p>A job that doesn’t set <code class="docutils literal notranslate"><span class="pre">parameters[&quot;queue&quot;]</span></code> at all uses the instance’s
 default queue (<code class="docutils literal notranslate"><span class="pre">[DEFAULT]</span> <span class="pre">default</span> <span class="pre">=</span></code>, or the sole section if there’s only
 one) – existing jobs/configs from before this feature existed are
@@ -866,6 +893,7 @@ tracking or, worse, resubmitting it as if it had merely gone missing.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#slurm-submission">SLURM submission</a><ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#enabling-it">Enabling it</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#multiple-queues">Multiple queues</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pbs-queues">PBS queues</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-happens">What happens</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#no-shared-filesystem">No shared filesystem</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#per-job-resource-overrides">Per-job resource overrides</a></li>

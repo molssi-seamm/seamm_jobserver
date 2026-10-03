@@ -6,7 +6,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.2 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.3 documentation</title>
   
   
   
@@ -47,7 +47,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=52372788"></script>
+    <script src="../../_static/documentation_options.js?v=f64fa391"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="search" title="Search" href="../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.2" />
+  <meta name="docsearch:version" content="2026.10.3" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -510,6 +510,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="kn">import</span><span class="w"> </span><span class="nn">seamm_jobserver</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">seamm_util</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">list_sections</span><span class="p">,</span> <span class="n">load_slurm_config</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.scheduler</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_scheduler</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.script</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_script</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.stage</span><span class="w"> </span><span class="kn">import</span> <span class="n">STAGE_LOCK_FILENAME</span><span class="p">,</span> <span class="n">StageError</span>
 
@@ -1508,7 +1509,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="bp">self</span><span class="o">.</span><span class="n">_backends</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_stagers</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">section</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sections</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="k">if</span> <span class="n">section</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"slurm"</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">section</span><span class="o">.</span><span class="n">is_batch</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_backends</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">section</span><span class="o">.</span><span class="n">build_backend</span><span class="p">()</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_stagers</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">section</span><span class="o">.</span><span class="n">build_stager</span><span class="p">()</span>
 
@@ -1553,7 +1554,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <span class="sa">f</span><span class="s2">"(default=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_default_queue</span><span class="si">!r}</span><span class="s2">)."</span>
             <span class="p">)</span>
             <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">section</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sections</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-                <span class="k">if</span> <span class="n">section</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"slurm"</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">section</span><span class="o">.</span><span class="n">is_batch</span><span class="p">:</span>
                     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                         <span class="sa">f</span><span class="s2">"  queue '</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">': SLURM via transport="</span>
                         <span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="n">section</span><span class="o">.</span><span class="n">transport</span><span class="si">}</span><span class="s2">', up to "</span>
@@ -2017,7 +2018,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">tasks</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_write_target</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="n">wdir</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"slurm"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">is_batch</span><span class="p">:</span>
             <span class="c1"># _start_job_slurm builds the command itself, after staging</span>
             <span class="c1"># (transport=ssh) determines the *effective* working directory</span>
             <span class="c1"># -- _build_cmd needs that, not the local wdir, to be correct.</span>
@@ -2056,11 +2057,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="c1"># Whether the evaluator itself runs on a remote host. A type=local</span>
         <span class="c1"># section runs it here whatever its transport, which then only says</span>
         <span class="c1"># how its *tasks* reach a cluster.</span>
-        <span class="n">remote</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-            <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"slurm"</span>
-            <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">"ssh"</span>
-        <span class="p">)</span>
+        <span class="n">remote</span> <span class="o">=</span> <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">is_batch</span> <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">"ssh"</span>
 
         <span class="k">if</span> <span class="n">remote</span><span class="p">:</span>
             <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remote_exe_prefix</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span>
@@ -2237,7 +2234,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="n">directives</span> <span class="o">=</span> <span class="n">section</span><span class="o">.</span><span class="n">merge_overrides</span><span class="p">(</span><span class="n">slurm_overrides</span><span class="p">)</span>
         <span class="n">directives</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">"job_name"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"seamm-</span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="n">directives</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">"chdir"</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">effective_wdir</span><span class="p">))</span>
-        <span class="n">script</span> <span class="o">=</span> <span class="n">build_script</span><span class="p">(</span><span class="n">directives</span><span class="p">,</span> <span class="n">payload</span><span class="p">)</span>
+        <span class="n">scheduler</span> <span class="o">=</span> <span class="n">get_scheduler</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">batch_scheduler</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">name</span> <span class="o">!=</span> <span class="s2">"slurm"</span><span class="p">:</span>
+            <span class="c1"># Like SLURM's default, the job gets the JobServer's environment</span>
+            <span class="c1"># unless the section says export = NONE; and portable spellings</span>
+            <span class="c1"># (time, partition, dependency) become the scheduler's own.</span>
+            <span class="n">directives</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">"export"</span><span class="p">,</span> <span class="s2">"ALL"</span><span class="p">)</span>
+            <span class="c1"># PBS writes the job's output where it was submitted (the home</span>
+            <span class="c1"># directory over ssh); put it in the job directory, staged back.</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">log_directives</span><span class="p">(</span><span class="n">effective_wdir</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">directives</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="n">directives</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">directives</span><span class="p">({},</span> <span class="n">directives</span><span class="p">)</span>
+        <span class="n">script</span> <span class="o">=</span> <span class="n">build_script</span><span class="p">(</span><span class="n">directives</span><span class="p">,</span> <span class="n">payload</span><span class="p">,</span> <span class="n">scheduler</span><span class="o">=</span><span class="n">scheduler</span><span class="p">)</span>
 
         <span class="c1"># Best-effort: keep a copy in the job's own *local* directory for</span>
         <span class="c1"># debugging, alongside job_data.json/references.db, regardless of</span>
@@ -2250,7 +2258,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         <span class="n">slurm_job_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backends</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">script</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: submitted to SLURM as </span><span class="si">{</span><span class="n">slurm_job_id</span><span class="si">}</span><span class="s2"> "</span>
+            <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: submitted to </span><span class="si">{</span><span class="n">scheduler</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2"> as </span><span class="si">{</span><span class="n">slurm_job_id</span><span class="si">}</span><span class="s2"> "</span>
             <span class="sa">f</span><span class="s2">"(queue=</span><span class="si">{</span><span class="n">queue</span><span class="si">}</span><span class="s2">, attempt </span><span class="si">{</span><span class="n">resubmit_count</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">)."</span>
         <span class="p">)</span>
 

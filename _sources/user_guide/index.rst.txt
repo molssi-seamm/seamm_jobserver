@@ -111,6 +111,36 @@ others to a real cluster, from one process:
     partition = batch
     max_concurrent_jobs = 20
 
+PBS queues
+----------
+
+A section with ``type = queue`` runs each flowchart as a batch job on the
+queueing system named by ``scheduler`` -- ``slurm`` (the default; ``type =
+slurm`` is the original spelling of this) or ``pbs`` (PBS Professional and
+OpenPBS):
+
+.. code-block:: ini
+
+    [molssi10]
+    type = queue
+    scheduler = pbs
+    transport = ssh
+    host = molssi10
+    remote_root = /home/psaxe/seamm_jobs
+    remote_run_from_jobserver = /home/psaxe/SEAMM/venv/bin/run_from_jobserver
+    queue = workq
+    walltime = 01:00:00
+    select = 1:ncpus=1:mem=20gb
+
+PBS's own directives (``queue``, ``walltime``, ``select``, ...) or the SLURM
+spellings (``partition``, ``time``, ``ntasks``, ``mem``, ...) may be used, and a
+job's own overrides (e.g. ``ntasks``, ``mem``) are merged into the ``select``.
+The job's output goes to ``pbs.out`` in the job directory. Like SLURM's default,
+the job gets the JobServer's environment unless the section sets
+``export = NONE``, in which case use an absolute ``remote_run_from_jobserver``
+(``remote_conda_env`` needs ``conda`` on the ``PATH``). The host running the
+flowchart needs ``seamm_scheduler`` 2026.10.3 or later.
+
 A job that doesn't set ``parameters["queue"]`` at all uses the instance's
 default queue (``[DEFAULT] default =``, or the sole section if there's only
 one) -- existing jobs/configs from before this feature existed are
