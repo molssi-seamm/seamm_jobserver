@@ -1510,8 +1510,16 @@ class JobServer(collections.abc.MutableMapping):
         this)."""
         queue = queue or self._default_queue
         section = self._sections.get(queue) if queue is not None else None
+        # Whether the evaluator itself runs on a remote host. A type=local
+        # section runs it here whatever its transport, which then only says
+        # how its *tasks* reach a cluster.
+        remote = (
+            section is not None
+            and section.type == "slurm"
+            and section.transport == "ssh"
+        )
 
-        if section is not None and section.transport == "ssh":
+        if remote:
             prefix = self._remote_exe_prefix(queue)
         else:
             path = sys.executable
@@ -1527,7 +1535,7 @@ class JobServer(collections.abc.MutableMapping):
         # (local mode, or an on-cluster SLURM JobServer) -- this inspects
         # *this* host, which is irrelevant for a transport=ssh queue
         # running on a different host entirely.
-        if section is None or section.transport != "ssh":
+        if not remote:
             cgroup = Path("/proc/self/cgroup")
             if (
                 Path("/.dockerenv").is_file()
@@ -1543,7 +1551,7 @@ class JobServer(collections.abc.MutableMapping):
         # with ~/SEAMM's configuration. Not for a transport=ssh queue, whose
         # remote host has its own root.
         root = (self.seamm_options or {}).get("root")
-        if root and (section is None or section.transport != "ssh"):
+        if root and not remote:
             cmd.append("--root")
             cmd.append(str(Path(root).expanduser()))
 

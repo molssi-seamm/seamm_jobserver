@@ -1951,3 +1951,25 @@ def test_start_job_ssh_writes_the_target_before_staging(db_path, tmp_path):
     stager.stage_in = stage_in
     js.start_job(12, str(wdir), [])
     assert seen == [True]
+
+
+def test_local_evaluator_with_ssh_tasks_runs_locally(db_path, tmp_path):
+    """The design's [arc]: the evaluator here, its tasks on a cluster."""
+    js = make_local_jobserver(db_path)
+    js.seamm_options = {"root": str(tmp_path / "root")}
+    js._sections = {
+        "arc": SlurmSection(
+            name="arc",
+            transport="ssh",
+            host="tinkercliffs",
+            type="local",
+            tasks="queue",
+            remote_root="/projects/x",
+            remote_python="/projects/seamm/SEAMM/venv/bin/python",
+        )
+    }
+    js._default_queue = "arc"
+    cmd = js._build_cmd(20, str(tmp_path / "Job_020"), [], "arc")
+    assert cmd[0].endswith("run_from_jobserver")
+    assert not cmd[0].startswith("/projects")
+    assert "--root" in cmd
