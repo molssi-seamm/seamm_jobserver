@@ -4,8 +4,8 @@
 
 Uses a real (temp-file) sqlite datastore with a minimal `jobs` table -- the
 same statements JobServer itself issues -- and a FakeSlurmBackend standing
-in for seamm_slurm, so these tests never touch a real SLURM installation.
-`seamm_slurm`'s own test suite covers the backend/script-building logic in
+in for seamm_scheduler, so these tests never touch a real SLURM installation.
+`seamm_scheduler`'s own test suite covers the backend/script-building logic in
 isolation; these tests cover how JobServer *uses* it.
 """
 
@@ -18,13 +18,13 @@ import psutil
 import pytest
 
 from seamm_jobserver.jobserver import JobServer
-from seamm_slurm.config import FieldLimits, SlurmSection
-from seamm_slurm.stage import StageError
-from seamm_slurm.status import JobStatus
+from seamm_scheduler.config import FieldLimits, SlurmSection
+from seamm_scheduler.stage import StageError
+from seamm_scheduler.scheduler import JobStatus
 
 
 class FakeSlurmBackend:
-    """A stand-in for seamm_slurm's SlurmBackend, scriptable per-test."""
+    """A stand-in for seamm_scheduler's SlurmBackend, scriptable per-test."""
 
     def __init__(self):
         self.submitted = []  # list of script text, in submission order
@@ -46,7 +46,7 @@ class FakeSlurmBackend:
 
 
 class FakeStager:
-    """A stand-in for seamm_slurm's RsyncStager/LocalStager, scriptable
+    """A stand-in for seamm_scheduler's RsyncStager/LocalStager, scriptable
     per-test -- never touches real ssh/rsync."""
 
     def __init__(self):
@@ -1903,3 +1903,73 @@ def test_build_cmd_no_root_over_ssh(db_path, tmp_path):
 def test_build_cmd_without_options(db_path, tmp_path):
     js = make_local_jobserver(db_path)
     assert "--root" not in js._build_cmd(7, tmp_path, [])
+
+
+# ---- target.json (parallel-execution campaign, phase 2) -------------------
+
+
+def test_start_job_writes_no_target_for_an_old_section(db_path, tmp_path):
+    wdir = tmp_path / "Job_010"
+    wdir.mkdir()
+    insert_job(db_path, 10, "submitted", str(wdir))
+    js = make_jobserver(db_path, wdir)
+    js.start_job(10, str(wdir), [])
+    assert not (wdir / "target.json").exists()
+
+
+def test_start_job_writes_the_target_for_a_task_section(db_path, tmp_path):
+    from seamm_scheduler import TargetSection
+
+    wdir = tmp_path / "Job_011"
+    wdir.mkdir()
+    insert_job(db_path, 11, "submitted", str(wdir))
+    js = make_jobserver(db_path, wdir)
+    section = js._sections["molssi10"]
+    section.tasks = "queue"
+    section.bundle_tasks = 8
+    js.start_job(11, str(wdir), [])
+    data = json.loads((wdir / "target.json").read_text())
+    assert data["name"] == "molssi10" and data["tasks"] == "queue"
+    # The evaluator (seamm_exec.targets) reads back the same section.
+    assert TargetSection.from_settings(data) == section
+
+
+def test_start_job_ssh_writes_the_target_before_staging(db_path, tmp_path):
+    wdir = tmp_path / "Job_012"
+    wdir.mkdir()
+    insert_job(db_path, 12, "submitted", str(wdir))
+    js = make_ssh_jobserver(db_path)
+    js._sections["molssi10"].tasks = "queue"
+    seen = []
+    stager = js._stagers["molssi10"]
+    original = stager.stage_in
+
+    def stage_in(local, remote):
+        seen.append((Path(local) / "target.json").exists())
+        return original(local, remote)
+
+    stager.stage_in = stage_in
+    js.start_job(12, str(wdir), [])
+    assert seen == [True]
+
+
+def test_local_evaluator_with_ssh_tasks_runs_locally(db_path, tmp_path):
+    """The design's [arc]: the evaluator here, its tasks on a cluster."""
+    js = make_local_jobserver(db_path)
+    js.seamm_options = {"root": str(tmp_path / "root")}
+    js._sections = {
+        "arc": SlurmSection(
+            name="arc",
+            transport="ssh",
+            host="tinkercliffs",
+            type="local",
+            tasks="queue",
+            remote_root="/projects/x",
+            remote_python="/projects/seamm/SEAMM/venv/bin/python",
+        )
+    }
+    js._default_queue = "arc"
+    cmd = js._build_cmd(20, str(tmp_path / "Job_020"), [], "arc")
+    assert cmd[0].endswith("run_from_jobserver")
+    assert not cmd[0].startswith("/projects")
+    assert "--root" in cmd

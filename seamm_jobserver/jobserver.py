@@ -22,9 +22,9 @@ import fasteners
 
 import seamm_jobserver
 import seamm_util
-from seamm_slurm.config import list_sections, load_slurm_config
-from seamm_slurm.script import build_script
-from seamm_slurm.stage import STAGE_LOCK_FILENAME, StageError
+from seamm_scheduler.config import list_sections, load_slurm_config
+from seamm_scheduler.script import build_script
+from seamm_scheduler.stage import STAGE_LOCK_FILENAME, StageError
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
@@ -1468,6 +1468,13 @@ class JobServer(collections.abc.MutableMapping):
 
         section = self._sections.get(queue) if queue is not None else None
 
+        # A target that says where the evaluator's tasks run is written into
+        # the job directory, where the evaluator finds it wherever it runs
+        # (staged with the job for a remote SLURM queue). Sections without
+        # the task keys write nothing, as before.
+        if section is not None and section.tasks is not None:
+            self._write_target(section, wdir)
+
         if section is not None and section.type == "slurm":
             # _start_job_slurm builds the command itself, after staging
             # (transport=ssh) determines the *effective* working directory
@@ -1483,6 +1490,14 @@ class JobServer(collections.abc.MutableMapping):
         self.logger.debug(f"cmd for {job_id}: {cmd}")
         return self._start_job_local(job_id, wdir, cmd, queue)
 
+    def _write_target(self, section, wdir):
+        """Write ``<job dir>/target.json`` for the evaluator (see
+        ``seamm_exec.targets``)."""
+        path = Path(wdir) / "target.json"
+        tmp = path.with_name("target.json.tmp")
+        tmp.write_text(json.dumps(section.task_settings(), indent=2, sort_keys=True))
+        os.replace(tmp, path)
+
     def _build_cmd(self, job_id, wdir, cmdline, queue=None):
         """Build the ``run_from_jobserver`` command line for a job -- the
         same command whether it's about to be run as a local subprocess or
@@ -1495,8 +1510,16 @@ class JobServer(collections.abc.MutableMapping):
         this)."""
         queue = queue or self._default_queue
         section = self._sections.get(queue) if queue is not None else None
+        # Whether the evaluator itself runs on a remote host. A type=local
+        # section runs it here whatever its transport, which then only says
+        # how its *tasks* reach a cluster.
+        remote = (
+            section is not None
+            and section.type == "slurm"
+            and section.transport == "ssh"
+        )
 
-        if section is not None and section.transport == "ssh":
+        if remote:
             prefix = self._remote_exe_prefix(queue)
         else:
             path = sys.executable
@@ -1512,7 +1535,7 @@ class JobServer(collections.abc.MutableMapping):
         # (local mode, or an on-cluster SLURM JobServer) -- this inspects
         # *this* host, which is irrelevant for a transport=ssh queue
         # running on a different host entirely.
-        if section is None or section.transport != "ssh":
+        if not remote:
             cgroup = Path("/proc/self/cgroup")
             if (
                 Path("/.dockerenv").is_file()
@@ -1528,7 +1551,7 @@ class JobServer(collections.abc.MutableMapping):
         # with ~/SEAMM's configuration. Not for a transport=ssh queue, whose
         # remote host has its own root.
         root = (self.seamm_options or {}).get("root")
-        if root and (section is None or section.transport != "ssh"):
+        if root and not remote:
             cmd.append("--root")
             cmd.append(str(Path(root).expanduser()))
 

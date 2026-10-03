@@ -1,5 +1,5 @@
 seamm
-seamm_slurm
+seamm_scheduler>=2026.10.2
 psutil
 fasteners
 
