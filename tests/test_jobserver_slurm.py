@@ -1973,3 +1973,52 @@ def test_local_evaluator_with_ssh_tasks_runs_locally(db_path, tmp_path):
     assert cmd[0].endswith("run_from_jobserver")
     assert not cmd[0].startswith("/projects")
     assert "--root" in cmd
+
+
+def test_start_job_pbs_script(db_path, tmp_path):
+    """type=queue with scheduler=pbs: #PBS directives, the JobServer's
+    environment (-V) and a cd into the job directory, since PBS has no chdir."""
+    wdir = tmp_path / "Job_003"
+    wdir.mkdir()
+    insert_job(db_path, 3, "submitted", str(wdir))
+
+    js = make_jobserver(db_path, wdir)
+    js._sections["molssi10"] = SlurmSection(
+        name="molssi10",
+        transport="local",
+        host=None,
+        type="queue",
+        scheduler="pbs",
+        directives={"queue": "workq", "time": "01:00:00"},
+    )
+    js.start_job(3, str(wdir), [])
+
+    script = js._backends["molssi10"].submitted[0]
+    lines = script.splitlines()
+    assert "#SBATCH" not in script
+    assert "#PBS -q workq" in lines
+    assert "#PBS -N seamm-3" in lines
+    assert "#PBS -l walltime=01:00:00" in lines
+    assert "#PBS -V" in lines
+    assert f"cd {wdir}" in lines
+    assert lines.index(f"cd {wdir}") < next(
+        i for i, line in enumerate(lines) if "run_from_jobserver" in line
+    )
+
+
+def test_start_job_pbs_export_none(db_path, tmp_path):
+    wdir = tmp_path / "Job_004"
+    wdir.mkdir()
+    insert_job(db_path, 4, "submitted", str(wdir))
+
+    js = make_jobserver(db_path, wdir)
+    js._sections["molssi10"] = SlurmSection(
+        name="molssi10",
+        transport="local",
+        host=None,
+        type="queue",
+        scheduler="pbs",
+        directives={"queue": "workq", "export": "NONE"},
+    )
+    js.start_job(4, str(wdir), [])
+    assert "#PBS -V" not in js._backends["molssi10"].submitted[0]

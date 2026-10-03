@@ -23,6 +23,7 @@ import fasteners
 import seamm_jobserver
 import seamm_util
 from seamm_scheduler.config import list_sections, load_slurm_config
+from seamm_scheduler.scheduler import get_scheduler
 from seamm_scheduler.script import build_script
 from seamm_scheduler.stage import STAGE_LOCK_FILENAME, StageError
 
@@ -977,7 +978,7 @@ class JobServer(collections.abc.MutableMapping):
         self._backends = {}
         self._stagers = {}
         for name, section in self._sections.items():
-            if section.type == "slurm":
+            if section.is_batch:
                 self._backends[name] = section.build_backend()
                 self._stagers[name] = section.build_stager()
 
@@ -1020,7 +1021,7 @@ class JobServer(collections.abc.MutableMapping):
                 f"(default={self._default_queue!r})."
             )
             for name, section in self._sections.items():
-                if section.type == "slurm":
+                if section.is_batch:
                     logger.info(
                         f"  queue '{name}': SLURM via transport="
                         f"'{section.transport}', up to "
@@ -1475,7 +1476,7 @@ class JobServer(collections.abc.MutableMapping):
         if section is not None and section.tasks is not None:
             self._write_target(section, wdir)
 
-        if section is not None and section.type == "slurm":
+        if section is not None and section.is_batch:
             # _start_job_slurm builds the command itself, after staging
             # (transport=ssh) determines the *effective* working directory
             # -- _build_cmd needs that, not the local wdir, to be correct.
@@ -1513,11 +1514,7 @@ class JobServer(collections.abc.MutableMapping):
         # Whether the evaluator itself runs on a remote host. A type=local
         # section runs it here whatever its transport, which then only says
         # how its *tasks* reach a cluster.
-        remote = (
-            section is not None
-            and section.type == "slurm"
-            and section.transport == "ssh"
-        )
+        remote = section is not None and section.is_batch and section.transport == "ssh"
 
         if remote:
             prefix = self._remote_exe_prefix(queue)
@@ -1694,7 +1691,14 @@ class JobServer(collections.abc.MutableMapping):
         directives = section.merge_overrides(slurm_overrides)
         directives.setdefault("job_name", f"seamm-{job_id}")
         directives.setdefault("chdir", str(effective_wdir))
-        script = build_script(directives, payload)
+        scheduler = get_scheduler(section.batch_scheduler)
+        if scheduler.name != "slurm":
+            # Like SLURM's default, the job gets the JobServer's environment
+            # unless the section says export = NONE; and portable spellings
+            # (time, partition, dependency) become the scheduler's own.
+            directives.setdefault("export", "ALL")
+            directives = scheduler.directives({}, directives)
+        script = build_script(directives, payload, scheduler=scheduler)
 
         # Best-effort: keep a copy in the job's own *local* directory for
         # debugging, alongside job_data.json/references.db, regardless of
@@ -1707,7 +1711,7 @@ class JobServer(collections.abc.MutableMapping):
 
         slurm_job_id = self._backends[queue].submit(script)
         self.logger.info(
-            f"Job {job_id}: submitted to SLURM as {slurm_job_id} "
+            f"Job {job_id}: submitted to {scheduler.name.upper()} as {slurm_job_id} "
             f"(queue={queue}, attempt {resubmit_count + 1})."
         )
 
