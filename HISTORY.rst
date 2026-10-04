@@ -11,6 +11,10 @@ History
     * A local job whose process ended without recording how is marked "error"
       (before: "started", or "finished" after a JobServer restart). With the new
       ``--resubmit-lost`` option the JobServer resubmits it to resume instead.
+    * **For administrators:** a cluster whose SEAMM is older than seamm_exec
+      2026.10.4.1 cannot resume, so each resubmit there reruns the job from the top
+      (reusing finished calculations). Set ``max_resubmits = 1`` on such queues
+      until the cluster's SEAMM is updated.
     * Requires seamm-scheduler 2026.10.4 (staging no longer leaves stale database
       logs behind).
 
