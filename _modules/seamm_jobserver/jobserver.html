@@ -6,7 +6,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.3 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.4 documentation</title>
   
   
   
@@ -47,7 +47,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=f64fa391"></script>
+    <script src="../../_static/documentation_options.js?v=3dc6335c"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="search" title="Search" href="../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.3" />
+  <meta name="docsearch:version" content="2026.10.4" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -567,6 +567,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
 
 
+<span class="c1"># States in job_data.json that say a job has not ended.</span>
+<span class="n">NON_TERMINAL_STATES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"submitted"</span><span class="p">,</span> <span class="s2">"started"</span><span class="p">,</span> <span class="s2">"running"</span><span class="p">,</span> <span class="s2">"waiting"</span><span class="p">,</span> <span class="s2">"pending"</span><span class="p">)</span>
+
+<span class="c1"># Asks the flowchart evaluator to resume from its checkpoint (seamm_exec).</span>
+<span class="n">RESUME_ENVIRONMENT</span> <span class="o">=</span> <span class="s2">"SEAMM_RESUME"</span>
+
+
 <div class="viewcode-block" id="JobServer">
 <a class="viewcode-back" href="../../api/seamm_jobserver.html#seamm_jobserver.jobserver.JobServer">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">JobServer</span><span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">MutableMapping</span><span class="p">):</span>
@@ -781,12 +788,25 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> is running as process </span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
                 <span class="k">continue</span>
 
+            <span class="c1"># A job that died without concluding (killed, out of memory) may</span>
+            <span class="c1"># be resubmitted to resume from its checkpoint, if asked for.</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_job_conclusion</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"wdir"</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_job_data_state</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"wdir"</span><span class="p">])</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># It started but never concluded, whatever its exit code.</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resubmit_lost_local</span><span class="p">(</span>
+                    <span class="n">job_id</span><span class="p">,</span>
+                    <span class="n">data</span><span class="p">[</span><span class="s2">"wdir"</span><span class="p">],</span>
+                    <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"queue"</span><span class="p">),</span>
+                    <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"resubmit_count"</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+                <span class="p">):</span>
+                    <span class="k">continue</span>
+                <span class="n">state</span> <span class="o">=</span> <span class="s2">"error"</span>
+
             <span class="n">finished</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span>
 
             <span class="c1"># Trust job_data.json -- the flowchart's own conclusion --</span>
             <span class="c1"># over the exit code when both are available; the exit code is</span>
             <span class="c1"># only a fallback for a hard crash that never got to write it.</span>
-            <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_job_data_state</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"wdir"</span><span class="p">])</span>
             <span class="n">bucket</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">queue</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"queue"</span><span class="p">)</span>
@@ -939,6 +959,20 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">None</span>
 
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_job_conclusion</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">wdir</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""The job's own conclusion from ``job_data.json``, or None.</span>
+
+<span class="sd">        ``submitted``, ``started`` and ``running`` are written when a job is</span>
+<span class="sd">        submitted and when its flowchart starts, so they say nothing about how</span>
+<span class="sd">        it ended: a job killed part way (walltime, a lost node, a reboot)</span>
+<span class="sd">        still has one of them. Only a terminal state counts.</span>
+<span class="sd">        """</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_read_job_data_state</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">state</span> <span class="ow">in</span> <span class="n">NON_TERMINAL_STATES</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">state</span>
+
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_annotate_job_data</span><span class="p">(</span><span class="n">wdir</span><span class="p">,</span> <span class="n">extra</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Add extra top-level key/value pairs to ``&lt;wdir&gt;/job_data.json``,</span>
@@ -1070,7 +1104,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="k">finally</span><span class="p">:</span>
                 <span class="n">lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
 
-        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_job_data_state</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_job_conclusion</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_annotate_job_data</span><span class="p">(</span>
                 <span class="n">wdir</span><span class="p">,</span> <span class="p">{</span><span class="s2">"queue"</span><span class="p">:</span> <span class="n">queue</span><span class="p">,</span> <span class="s2">"slurm_job_id"</span><span class="p">:</span> <span class="n">data</span><span class="p">[</span><span class="s2">"slurm_job_id"</span><span class="p">]}</span>
@@ -1654,6 +1688,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
             <span class="s2">"JobServer"</span><span class="p">,</span>
+            <span class="s2">"--resubmit-lost"</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">"store_true"</span><span class="p">,</span>
+            <span class="n">help</span><span class="o">=</span><span class="p">(</span>
+                <span class="s2">"Resubmit a local job whose process ended without the job "</span>
+                <span class="s2">"concluding (a reboot, a kill), so that it resumes from its "</span>
+                <span class="s2">"checkpoint. Off by default; such jobs are marked as errors."</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+
+        <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+            <span class="s2">"JobServer"</span><span class="p">,</span>
             <span class="s2">"--name"</span><span class="p">,</span>
             <span class="n">default</span><span class="o">=</span><span class="n">socket</span><span class="o">.</span><span class="n">gethostname</span><span class="p">(),</span>
             <span class="n">action</span><span class="o">=</span><span class="s2">"store"</span><span class="p">,</span>
@@ -1736,14 +1781,16 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="sd">        real process that needs to actually be terminated, not just</span>
 <span class="sd">        forgotten about.</span>
 <span class="sd">        """</span>
-        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
             <span class="s2">"SELECT id, status, path, json_extract(parameters, '$.pid'),"</span>
             <span class="s2">"       json_extract(parameters, '$.slurm_job_id'),"</span>
-            <span class="s2">"       json_extract(parameters, '$.queue')"</span>
+            <span class="s2">"       json_extract(parameters, '$.queue'),"</span>
+            <span class="s2">"       json_extract(parameters, '$.resubmit_count')"</span>
             <span class="s2">"  FROM jobs"</span>
             <span class="s2">" WHERE status IN ('running', 'kill')"</span>
-        <span class="p">):</span>
-            <span class="n">job_id</span><span class="p">,</span> <span class="n">orig_status</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">slurm_id</span><span class="p">,</span> <span class="n">queue</span> <span class="o">=</span> <span class="n">row</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="n">job_id</span><span class="p">,</span> <span class="n">orig_status</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">slurm_id</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">resubmit_count</span> <span class="o">=</span> <span class="n">row</span>
 
             <span class="k">if</span> <span class="n">pid</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1778,7 +1825,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <span class="c1"># success just because the process ended -- the same</span>
                     <span class="c1"># principle applied everywhere else a job's outcome is</span>
                     <span class="c1"># determined (see _check_for_finished_jobs_local).</span>
-                    <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_job_data_state</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
+                    <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_job_conclusion</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
+                    <span class="n">started</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_job_data_state</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                    <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">started</span><span class="p">:</span>
+                        <span class="c1"># It started but never concluded: it died with the</span>
+                        <span class="c1"># machine or was killed. Resume it if asked to,</span>
+                        <span class="c1"># else it failed.</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resubmit_lost_local</span><span class="p">(</span>
+                            <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">resubmit_count</span> <span class="ow">or</span> <span class="mi">0</span>
+                        <span class="p">):</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">previous_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+                            <span class="k">continue</span>
+                        <span class="n">state</span> <span class="o">=</span> <span class="s2">"error"</span>
                     <span class="n">final_status</span> <span class="o">=</span> <span class="n">state</span> <span class="k">if</span> <span class="n">state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">"finished"</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> already </span><span class="si">{</span><span class="n">final_status</span><span class="si">}</span><span class="s2"> (pid=</span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">)."</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">orig_status</span> <span class="o">==</span> <span class="s2">"kill"</span><span class="p">:</span>
@@ -2133,12 +2191,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">section</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2">."</span>
         <span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_start_job_local</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">"""Run a job as a local subprocess (today's, pre-SLURM, behavior)."""</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_start_job_local</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">resume</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Run a job as a local subprocess (today's, pre-SLURM, behavior).</span>
+
+<span class="sd">        ``resume`` asks the flowchart to resume from its checkpoint.</span>
+<span class="sd">        """</span>
         <span class="c1"># Create a copy of the current environment with job-specific variables</span>
         <span class="n">env</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
         <span class="n">env</span><span class="p">[</span><span class="s2">"SEAMM_JOB_ID"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span>
         <span class="n">env</span><span class="p">[</span><span class="s2">"SEAMM_JOBSERVER"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span>
+        <span class="n">env</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">RESUME_ENVIRONMENT</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">resume</span><span class="p">:</span>
+            <span class="n">env</span><span class="p">[</span><span class="n">RESUME_ENVIRONMENT</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"1"</span>
 
         <span class="n">process</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span>
             <span class="n">cmd</span><span class="p">,</span>
@@ -2162,6 +2226,51 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="bp">self</span><span class="o">.</span><span class="n">total_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
 
         <span class="k">return</span> <span class="n">process</span><span class="o">.</span><span class="n">pid</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resubmit_lost_local</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">resubmit_count</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Resubmit a local job that died without concluding, to resume.</span>
+
+<span class="sd">        Only with ``--resubmit-lost`` (off by default), and up to the queue's</span>
+<span class="sd">        ``max_resubmits`` (3 without a queue). The flowchart is asked to resume</span>
+<span class="sd">        from its checkpoint; one too old to know about checkpoints starts from</span>
+<span class="sd">        the top.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        bool</span>
+<span class="sd">            True if resubmitted (the job stays tracked, as running).</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"resubmit_lost"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">section</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sections</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span> <span class="k">if</span> <span class="n">queue</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">max_resubmits</span> <span class="o">=</span> <span class="n">section</span><span class="o">.</span><span class="n">max_resubmits</span> <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">3</span>
+        <span class="k">if</span> <span class="n">resubmit_count</span> <span class="o">&gt;=</span> <span class="n">max_resubmits</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: not resubmitting after </span><span class="si">{</span><span class="n">resubmit_count</span><span class="si">}</span><span class="s2"> "</span>
+                <span class="s2">"resubmit(s); it ended without concluding."</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">"SELECT json_extract(parameters, '$.cmdline') FROM jobs WHERE id = ?"</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">job_id</span><span class="p">,),</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+        <span class="n">cmdline</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="n">row</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="p">[]</span>
+        <span class="n">cmd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_cmd</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">queue</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: ended without concluding; resubmitting to resume "</span>
+            <span class="sa">f</span><span class="s2">"(attempt </span><span class="si">{</span><span class="n">resubmit_count</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">max_resubmits</span><span class="si">}</span><span class="s2">)."</span>
+        <span class="p">)</span>
+        <span class="n">pid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_start_job_local</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">resume</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">][</span><span class="s2">"resubmit_count"</span><span class="p">]</span> <span class="o">=</span> <span class="n">resubmit_count</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">"UPDATE jobs SET status = 'running',"</span>
+            <span class="s2">"       parameters=json_set(json_set(jobs.parameters, '$.pid', ?),"</span>
+            <span class="s2">"                           '$.resubmit_count', ?)"</span>
+            <span class="s2">" WHERE id = ?"</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">resubmit_count</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">job_id</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">return</span> <span class="kc">True</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_remote_wdir</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""The remote scratch path a ``transport = ssh`` queue's job</span>
@@ -2224,10 +2333,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="n">cmd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_cmd</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">effective_wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">queue</span><span class="p">)</span>
         <span class="n">quoted_cmd</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">shlex</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cmd</span><span class="p">)</span>
         <span class="n">setup</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">section</span><span class="o">.</span><span class="n">setup</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span> <span class="k">if</span> <span class="n">section</span><span class="o">.</span><span class="n">setup</span> <span class="k">else</span> <span class="s2">""</span>
+        <span class="c1"># A resubmitted job resumes from its checkpoint. In the script, not the</span>
+        <span class="c1"># environment: queues may run jobs with export=NONE or a clean login.</span>
+        <span class="n">resume</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"export </span><span class="si">{</span><span class="n">RESUME_ENVIRONMENT</span><span class="si">}</span><span class="s2">=1</span><span class="se">\n</span><span class="s2">"</span> <span class="k">if</span> <span class="n">resubmit_count</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">""</span>
         <span class="n">payload</span> <span class="o">=</span> <span class="p">(</span>
             <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">setup</span><span class="si">}</span><span class="s2">"</span>
             <span class="sa">f</span><span class="s2">"export SEAMM_JOB_ID=</span><span class="si">{</span><span class="n">shlex</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">job_id</span><span class="p">))</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
             <span class="sa">f</span><span class="s2">"export SEAMM_JOBSERVER=</span><span class="si">{</span><span class="n">shlex</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">'name'</span><span class="p">])</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">resume</span><span class="si">}</span><span class="s2">"</span>
             <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">quoted_cmd</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
         <span class="p">)</span>
 

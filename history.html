@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.10.3 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.10.4 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=f64fa391"></script>
+    <script src="_static/documentation_options.js?v=3dc6335c"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -62,7 +62,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Credits" href="authors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.3" />
+  <meta name="docsearch:version" content="2026.10.4" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -505,6 +505,23 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.10.4 – Bugfix: resubmit lost jobs so that they resume</dt><dd><ul class="simple">
+<li><p>A job on a cluster that ended without recording how (out of walltime, a lost
+node) was marked as “started” and never resubmitted, because the “started” the
+job writes when it begins counted as its outcome. Such jobs are now resubmitted,
+up to the queue’s <code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code>, with <code class="docutils literal notranslate"><span class="pre">SEAMM_RESUME=1</span></code> in the batch script
+so that the flowchart resumes from its checkpoint (seamm_exec 2026.10.4.1).</p></li>
+<li><p>A local job whose process ended without recording how is marked “error”
+(before: “started”, or “finished” after a JobServer restart). With the new
+<code class="docutils literal notranslate"><span class="pre">--resubmit-lost</span></code> option the JobServer resubmits it to resume instead.</p></li>
+<li><p><strong>For administrators:</strong> a cluster whose SEAMM is older than seamm_exec
+2026.10.4.1 cannot resume, so each resubmit there reruns the job from the top
+(reusing finished calculations). Set <code class="docutils literal notranslate"><span class="pre">max_resubmits</span> <span class="pre">=</span> <span class="pre">1</span></code> on such queues
+until the cluster’s SEAMM is updated.</p></li>
+<li><p>Requires seamm-scheduler 2026.10.4 (staging no longer leaves stale database
+logs behind).</p></li>
+</ul>
+</dd>
 <dt>2026.10.3 – Flowcharts as PBS jobs</dt><dd><ul class="simple">
 <li><p>A queue with <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">queue</span></code> and <code class="docutils literal notranslate"><span class="pre">scheduler</span> <span class="pre">=</span> <span class="pre">pbs</span></code> runs each flowchart as a
 PBS job (<code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">slurm</span></code>, or <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">queue</span></code> with <code class="docutils literal notranslate"><span class="pre">scheduler</span> <span class="pre">=</span> <span class="pre">slurm</span></code>, for
