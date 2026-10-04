@@ -2048,3 +2048,164 @@ def test_start_job_pbs_overrides_reach_the_select(db_path, tmp_path):
     js.start_job(5, str(wdir), [], slurm_overrides={"ntasks": 6, "mem": "8G"})
     script = js._backends["molssi10"].submitted[0]
     assert "#PBS -l select=1:ncpus=6:mem=8192mb:mpiprocs=6" in script.splitlines()
+
+
+# --------------------------------------------------------------------------
+# Phase 5: a job_data.json that never concluded, and resuming
+# --------------------------------------------------------------------------
+
+STARTED = '!MolSSI job_data 1.0\n{"state": "started"}\n'
+
+
+@pytest.mark.parametrize(
+    "state, conclusion",
+    [
+        ("started", None),
+        ("submitted", None),
+        ("running", None),
+        ("finished", "finished"),
+        ("error", "error"),
+    ],
+)
+def test_job_conclusion(tmp_path, state, conclusion):
+    (tmp_path / "job_data.json").write_text(
+        f'!MolSSI job_data 1.0\n{{"state": "{state}"}}\n'
+    )
+    assert JobServer._job_conclusion(tmp_path) == conclusion
+
+
+def test_walltime_killed_job_is_resubmitted_to_resume(db_path, tmp_path):
+    """A job killed part way leaves state 'started': resubmit, and resume."""
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    (wdir / "job_data.json").write_text(STARTED)
+    insert_job(db_path, 1, "running", str(wdir))
+
+    js = make_jobserver(db_path, wdir)
+    js._jobs[1] = {
+        "mode": "slurm",
+        "slurm_job_id": "42",
+        "wdir": str(wdir),
+        "cmdline": ["run_from_jobserver", "1", str(wdir)],
+        "resubmit_count": 0,
+    }
+    js._times[1] = {}
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="TIMEOUT", category="failed"
+    )
+
+    js.check_for_finished_jobs()
+
+    submitted = js._backends["molssi10"].submitted
+    assert len(submitted) == 1
+    assert "export SEAMM_RESUME=1\n" in submitted[0]
+    status, params = get_job(db_path, 1)
+    assert status == "running"
+    assert params["resubmit_count"] == 1
+
+
+def test_first_submission_does_not_resume(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "submitted", str(wdir))
+    js = make_jobserver(db_path, wdir)
+    js._start_job_slurm(1, str(wdir), ["run_from_jobserver"], "molssi10")
+    assert "SEAMM_RESUME" not in js._backends["molssi10"].submitted[0]
+
+
+def _local_job(js, wdir, returncode=0):
+    process = FakeProcess(running=False, returncode=returncode)
+    js._jobs[1] = {
+        "mode": "local",
+        "pid": process.pid,
+        "process": process,
+        "wdir": str(wdir),
+    }
+    js._times[1] = {}
+
+
+def test_local_job_that_never_concluded_is_an_error(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    (wdir / "job_data.json").write_text(STARTED)
+    insert_job(db_path, 1, "running", str(wdir))
+    js = make_local_jobserver(db_path)
+    _local_job(js, wdir, returncode=0)
+
+    js.check_for_finished_jobs()
+
+    assert get_job(db_path, 1)[0] == "error"  # not 'started', not 'finished'
+    assert 1 not in js._jobs
+
+
+def test_local_job_resubmitted_when_asked(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    (wdir / "job_data.json").write_text(STARTED)
+    insert_job(db_path, 1, "running", str(wdir), cmdline=["--n", "3"])
+    js = make_local_jobserver(db_path)
+    js.options["resubmit_lost"] = True
+    _local_job(js, wdir)
+
+    started = {}
+
+    def fake_popen(cmd, cwd=None, env=None, **kwargs):
+        started.update(cmd=cmd, env=env)
+        return FakeProcess(running=True)
+
+    with mock.patch("psutil.Popen", side_effect=fake_popen):
+        js.check_for_finished_jobs()
+
+    assert started["env"]["SEAMM_RESUME"] == "1"
+    assert "--n" in started["cmd"]
+    status, params = get_job(db_path, 1)
+    assert status == "running"
+    assert params["resubmit_count"] == 1
+    assert js._jobs[1]["resubmit_count"] == 1
+
+
+def test_local_resubmit_stops_at_the_cap(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    (wdir / "job_data.json").write_text(STARTED)
+    insert_job(db_path, 1, "running", str(wdir))
+    js = make_local_jobserver(db_path)
+    js.options["resubmit_lost"] = True
+    _local_job(js, wdir)
+    js._jobs[1]["resubmit_count"] = 3
+
+    with mock.patch("psutil.Popen") as popen:
+        js.check_for_finished_jobs()
+    popen.assert_not_called()
+    assert get_job(db_path, 1)[0] == "error"
+
+
+def test_reattach_local_job_that_never_concluded(db_path, tmp_path):
+    """After a reboot: an error by default, resubmitted when asked."""
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    (wdir / "job_data.json").write_text(STARTED)
+    insert_job(db_path, 1, "running", str(wdir), extra_params={"pid": 4242})
+    js = make_local_jobserver(db_path)
+    with mock.patch("psutil.Process", side_effect=psutil.NoSuchProcess(4242)):
+        js._reattach_local_jobs()
+    assert get_job(db_path, 1)[0] == "error"
+
+    insert_job(db_path, 2, "running", str(wdir), extra_params={"pid": 4243})
+    js = make_local_jobserver(db_path)
+    js.options["resubmit_lost"] = True
+    with mock.patch(
+        "psutil.Process", side_effect=psutil.NoSuchProcess(4243)
+    ), mock.patch("psutil.Popen", return_value=FakeProcess(running=True)) as popen:
+        js._reattach_local_jobs()
+    assert popen.call_args.kwargs["env"]["SEAMM_RESUME"] == "1"
+    assert get_job(db_path, 2)[0] == "running"
+    assert 2 in js._jobs
+
+
+def test_local_start_does_not_inherit_resume(db_path, tmp_path, monkeypatch):
+    monkeypatch.setenv("SEAMM_RESUME", "1")
+    js = make_local_jobserver(db_path)
+    with mock.patch("psutil.Popen", return_value=FakeProcess(running=True)) as popen:
+        js._start_job_local(1, str(tmp_path), ["run_from_jobserver"])
+    assert "SEAMM_RESUME" not in popen.call_args.kwargs["env"]

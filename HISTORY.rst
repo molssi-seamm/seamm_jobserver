@@ -2,6 +2,22 @@
 History
 =======
 
+2026.10.4 -- Bugfix: resubmit lost jobs so that they resume
+    * A job on a cluster that ended without recording how (out of walltime, a lost
+      node) was marked as "started" and never resubmitted, because the "started" the
+      job writes when it begins counted as its outcome. Such jobs are now resubmitted,
+      up to the queue's ``max_resubmits``, with ``SEAMM_RESUME=1`` in the batch script
+      so that the flowchart resumes from its checkpoint (seamm_exec 2026.10.4.1).
+    * A local job whose process ended without recording how is marked "error"
+      (before: "started", or "finished" after a JobServer restart). With the new
+      ``--resubmit-lost`` option the JobServer resubmits it to resume instead.
+    * **For administrators:** a cluster whose SEAMM is older than seamm_exec
+      2026.10.4.1 cannot resume, so each resubmit there reruns the job from the top
+      (reusing finished calculations). Set ``max_resubmits = 1`` on such queues
+      until the cluster's SEAMM is updated.
+    * Requires seamm-scheduler 2026.10.4 (staging no longer leaves stale database
+      logs behind).
+
 2026.10.3 -- Flowcharts as PBS jobs
     * A queue with ``type = queue`` and ``scheduler = pbs`` runs each flowchart as a
       PBS job (``type = slurm``, or ``type = queue`` with ``scheduler = slurm``, for

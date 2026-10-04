@@ -68,6 +68,13 @@ class TkTextHandler(logging.StreamHandler):
         self.text.insert("end", "\n")
 
 
+# States in job_data.json that say a job has not ended.
+NON_TERMINAL_STATES = ("submitted", "started", "running", "waiting", "pending")
+
+# Asks the flowchart evaluator to resume from its checkpoint (seamm_exec).
+RESUME_ENVIRONMENT = "SEAMM_RESUME"
+
+
 class JobServer(collections.abc.MutableMapping):
     def __init__(self, logger=logger):
         """Initialize the instance
@@ -274,12 +281,25 @@ class JobServer(collections.abc.MutableMapping):
                 self.logger.debug(f"Job {job_id} is running as process {pid}")
                 continue
 
+            # A job that died without concluding (killed, out of memory) may
+            # be resubmitted to resume from its checkpoint, if asked for.
+            state = self._job_conclusion(data["wdir"])
+            if state is None and self._read_job_data_state(data["wdir"]) is not None:
+                # It started but never concluded, whatever its exit code.
+                if self._resubmit_lost_local(
+                    job_id,
+                    data["wdir"],
+                    data.get("queue"),
+                    data.get("resubmit_count", 0),
+                ):
+                    continue
+                state = "error"
+
             finished.append(job_id)
 
             # Trust job_data.json -- the flowchart's own conclusion --
             # over the exit code when both are available; the exit code is
             # only a fallback for a hard crash that never got to write it.
-            state = self._read_job_data_state(data["wdir"])
             bucket = None
             if state is not None:
                 queue = data.get("queue")
@@ -432,6 +452,20 @@ class JobServer(collections.abc.MutableMapping):
         except (OSError, ValueError, KeyError):
             return None
 
+    @classmethod
+    def _job_conclusion(cls, wdir):
+        """The job's own conclusion from ``job_data.json``, or None.
+
+        ``submitted``, ``started`` and ``running`` are written when a job is
+        submitted and when its flowchart starts, so they say nothing about how
+        it ended: a job killed part way (walltime, a lost node, a reboot)
+        still has one of them. Only a terminal state counts.
+        """
+        state = cls._read_job_data_state(wdir)
+        if state in NON_TERMINAL_STATES:
+            return None
+        return state
+
     @staticmethod
     def _annotate_job_data(wdir, extra):
         """Add extra top-level key/value pairs to ``<wdir>/job_data.json``,
@@ -563,7 +597,7 @@ class JobServer(collections.abc.MutableMapping):
             finally:
                 lock.release()
 
-        state = self._read_job_data_state(wdir)
+        state = self._job_conclusion(wdir)
         if state is not None:
             self._annotate_job_data(
                 wdir, {"queue": queue, "slurm_job_id": data["slurm_job_id"]}
@@ -1118,6 +1152,17 @@ class JobServer(collections.abc.MutableMapping):
 
         parser.add_argument(
             "JobServer",
+            "--resubmit-lost",
+            action="store_true",
+            help=(
+                "Resubmit a local job whose process ended without the job "
+                "concluding (a reboot, a kill), so that it resumes from its "
+                "checkpoint. Off by default; such jobs are marked as errors."
+            ),
+        )
+
+        parser.add_argument(
+            "JobServer",
             "--name",
             default=socket.gethostname(),
             action="store",
@@ -1196,14 +1241,16 @@ class JobServer(collections.abc.MutableMapping):
         real process that needs to actually be terminated, not just
         forgotten about.
         """
-        for row in self.db.execute(
+        rows = self.db.execute(
             "SELECT id, status, path, json_extract(parameters, '$.pid'),"
             "       json_extract(parameters, '$.slurm_job_id'),"
-            "       json_extract(parameters, '$.queue')"
+            "       json_extract(parameters, '$.queue'),"
+            "       json_extract(parameters, '$.resubmit_count')"
             "  FROM jobs"
             " WHERE status IN ('running', 'kill')"
-        ):
-            job_id, orig_status, wdir, pid, slurm_id, queue = row
+        ).fetchall()
+        for row in rows:
+            job_id, orig_status, wdir, pid, slurm_id, queue, resubmit_count = row
 
             if pid is None:
                 if slurm_id is not None:
@@ -1238,7 +1285,18 @@ class JobServer(collections.abc.MutableMapping):
                     # success just because the process ended -- the same
                     # principle applied everywhere else a job's outcome is
                     # determined (see _check_for_finished_jobs_local).
-                    state = self._read_job_data_state(wdir)
+                    state = self._job_conclusion(wdir)
+                    started = self._read_job_data_state(wdir) is not None
+                    if state is None and started:
+                        # It started but never concluded: it died with the
+                        # machine or was killed. Resume it if asked to,
+                        # else it failed.
+                        if self._resubmit_lost_local(
+                            job_id, wdir, queue, resubmit_count or 0
+                        ):
+                            self.previous_jobs += 1
+                            continue
+                        state = "error"
                     final_status = state if state is not None else "finished"
                 self.logger.info(f"Job {job_id} already {final_status} (pid={pid}).")
                 if orig_status == "kill":
@@ -1590,12 +1648,18 @@ class JobServer(collections.abc.MutableMapping):
             f"{section.host}."
         )
 
-    def _start_job_local(self, job_id, wdir, cmd, queue=None):
-        """Run a job as a local subprocess (today's, pre-SLURM, behavior)."""
+    def _start_job_local(self, job_id, wdir, cmd, queue=None, resume=False):
+        """Run a job as a local subprocess (today's, pre-SLURM, behavior).
+
+        ``resume`` asks the flowchart to resume from its checkpoint.
+        """
         # Create a copy of the current environment with job-specific variables
         env = os.environ.copy()
         env["SEAMM_JOB_ID"] = str(job_id)
         env["SEAMM_JOBSERVER"] = self.options["name"]
+        env.pop(RESUME_ENVIRONMENT, None)
+        if resume:
+            env[RESUME_ENVIRONMENT] = "1"
 
         process = psutil.Popen(
             cmd,
@@ -1619,6 +1683,51 @@ class JobServer(collections.abc.MutableMapping):
         self.total_jobs += 1
 
         return process.pid
+
+    def _resubmit_lost_local(self, job_id, wdir, queue, resubmit_count):
+        """Resubmit a local job that died without concluding, to resume.
+
+        Only with ``--resubmit-lost`` (off by default), and up to the queue's
+        ``max_resubmits`` (3 without a queue). The flowchart is asked to resume
+        from its checkpoint; one too old to know about checkpoints starts from
+        the top.
+
+        Returns
+        -------
+        bool
+            True if resubmitted (the job stays tracked, as running).
+        """
+        if not self.options.get("resubmit_lost", False):
+            return False
+        section = self._sections.get(queue) if queue is not None else None
+        max_resubmits = section.max_resubmits if section is not None else 3
+        if resubmit_count >= max_resubmits:
+            self.logger.warning(
+                f"Job {job_id}: not resubmitting after {resubmit_count} "
+                "resubmit(s); it ended without concluding."
+            )
+            return False
+        row = self.db.execute(
+            "SELECT json_extract(parameters, '$.cmdline') FROM jobs WHERE id = ?",
+            (job_id,),
+        ).fetchone()
+        cmdline = json.loads(row[0]) if row is not None and row[0] else []
+        cmd = self._build_cmd(job_id, wdir, cmdline, queue)
+        self.logger.warning(
+            f"Job {job_id}: ended without concluding; resubmitting to resume "
+            f"(attempt {resubmit_count + 1}/{max_resubmits})."
+        )
+        pid = self._start_job_local(job_id, wdir, cmd, queue, resume=True)
+        self._jobs[job_id]["resubmit_count"] = resubmit_count + 1
+        self.db.execute(
+            "UPDATE jobs SET status = 'running',"
+            "       parameters=json_set(json_set(jobs.parameters, '$.pid', ?),"
+            "                           '$.resubmit_count', ?)"
+            " WHERE id = ?",
+            (pid, resubmit_count + 1, job_id),
+        )
+        self.db.commit()
+        return True
 
     def _remote_wdir(self, wdir, queue=None):
         """The remote scratch path a ``transport = ssh`` queue's job
@@ -1681,10 +1790,14 @@ class JobServer(collections.abc.MutableMapping):
         cmd = self._build_cmd(job_id, effective_wdir, cmdline, queue)
         quoted_cmd = " ".join(shlex.quote(c) for c in cmd)
         setup = f"{section.setup}\n" if section.setup else ""
+        # A resubmitted job resumes from its checkpoint. In the script, not the
+        # environment: queues may run jobs with export=NONE or a clean login.
+        resume = f"export {RESUME_ENVIRONMENT}=1\n" if resubmit_count > 0 else ""
         payload = (
             f"{setup}"
             f"export SEAMM_JOB_ID={shlex.quote(str(job_id))}\n"
             f"export SEAMM_JOBSERVER={shlex.quote(self.options['name'])}\n"
+            f"{resume}"
             f"{quoted_cmd}\n"
         )
 
