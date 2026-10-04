@@ -189,14 +189,24 @@ the one place a user can see which cluster a job actually ran on. Once
 SLURM reports a job's state as terminal (or has no record of it at all),
 the JobServer:
 
-1. Trusts the job's own ``job_data.json`` if the run got far enough to
-   write one, and writes that outcome (``finished``/``error``) to the
-   datastore.
-2. Otherwise resubmits, up to ``max_resubmits`` times -- safe because
-   flowcharts checkpoint completed steps and resume from the first
-   incomplete one, so a resubmitted run picks up where it left off rather
-   than starting over.
+1. Trusts the job's own ``job_data.json`` if it records how the run ended
+   (``finished``/``error``), and writes that outcome to the datastore. The
+   ``submitted`` and ``started`` it holds while a job is queued or running say
+   nothing about how it ended: a job killed part way (out of walltime, a lost
+   node) still has one of them.
+2. Otherwise resubmits, up to ``max_resubmits`` times, in the same directory,
+   with ``SEAMM_RESUME=1`` in the batch script, so the flowchart resumes from its
+   checkpoint at the first step (or Loop iteration) it had not finished rather
+   than starting over (seamm_exec 2026.10.4.1 and later; an older one starts from
+   the top, reusing its finished calculations). Until the cluster's SEAMM is that
+   new, a low ``max_resubmits`` limits the cost of reruns from the top.
 3. Beyond the cap, gives up and marks the job ``error``.
+
+A local job (no scheduler) whose process ended without recording how it ended
+(the machine rebooted, the process was killed) is marked ``error``. Started with
+``--resubmit-lost``, the JobServer instead resubmits such a job to resume, up to
+the queue's ``max_resubmits`` (3 without a queue), so a laptop's jobs carry on when
+it comes back.
 
 This same reconciliation runs both during normal polling and when the
 JobServer itself restarts (it re-checks every job still marked ``running``
