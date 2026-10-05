@@ -202,6 +202,18 @@ the JobServer:
    new, a low ``max_resubmits`` limits the cost of reruns from the top.
 3. Beyond the cap, gives up and marks the job ``error``.
 
+The same holds for a PBS queue, which loses jobs the same ways SLURM does (a
+failed node, a ``qdel`` by an administrator, the walltime), and for the TaskServer
+(``scheduler = seamm``), whose job is lost when its runner stops (the machine
+rebooted). **How many resubmits:** 3 for a production section -- enough for a lost
+node or two and a walltime that was a little short -- and more only for a section
+whose walltime is deliberately shorter than its jobs (a job then needs one resubmit
+per walltime it runs). Each resubmit resumes from the checkpoint, so the cost of
+one is the unfinished step, not the whole job. PBS must keep finished jobs in its
+history long enough to be seen after a long absence of the JobServer (``qmgr -c
+"set server job_history_enable = True"`` and ``job_history_duration`` of a week or
+more): a job finished but gone from ``qstat -x`` would be taken as lost.
+
 A local job (no scheduler) whose process ended without recording how it ended
 (the machine rebooted, the process was killed) is marked ``error``. Started with
 ``--resubmit-lost``, the JobServer instead resubmits such a job to resume, up to

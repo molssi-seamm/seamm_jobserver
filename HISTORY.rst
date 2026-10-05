@@ -1,7 +1,11 @@
 =======
 History
 =======
-
+2026.10.5 -- Resubmits for PBS and the TaskServer
+    * The user guide says how many resubmits to allow for SLURM, PBS and the
+      TaskServer (``scheduler = seamm``), and how long PBS must keep finished jobs in
+      its history.
+    * Requires seamm_scheduler 2026.10.5, for the TaskServer.
 2026.10.4 -- Bugfix: resubmit lost jobs so that they resume
     * A job on a cluster that ended without recording how (out of walltime, a lost
       node) was marked as "started" and never resubmitted, because the "started" the
