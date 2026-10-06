@@ -1586,20 +1586,6 @@ class JobServer(collections.abc.MutableMapping):
 
         cmd = prefix + [str(job_id), str(wdir), str(self.db_path)]
 
-        # Check if in docker container. Only meaningful for local execution
-        # (local mode, or an on-cluster SLURM JobServer) -- this inspects
-        # *this* host, which is irrelevant for a transport=ssh queue
-        # running on a different host entirely.
-        if not remote:
-            cgroup = Path("/proc/self/cgroup")
-            if (
-                Path("/.dockerenv").is_file()
-                or cgroup.is_file()
-                and "docker" in cgroup.read_text()
-            ):
-                cmd.append("--executor")
-                cmd.append("docker")
-
         # The job must use this JobServer's installation: its code .ini files,
         # data and configuration live under the root. Without --root the job
         # fell back to ~/SEAMM, so a JobServer for ~/SEAMM_DEV ran its jobs
