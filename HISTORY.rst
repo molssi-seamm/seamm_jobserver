@@ -1,6 +1,15 @@
 =======
 History
 =======
+2026.10.6 -- Bugfix: the JobServer crashed on restart if a job had finished meanwhile
+    * When the JobServer restarted and a SLURM job had finished while it was down,
+      finalizing that job raised ``KeyError: 'slurm_job_id'``, so the JobServer
+      crashed on every start until the job record was cleared (ChemAI, 2026-10-06).
+      The job is now finalized from its ``job_data.json`` as usual, and a job with no
+      SLURM id on record is handled too.
+    * Removed the support for running jobs in a Docker container, which was no longer
+      used or maintained.
+
 2026.10.5 -- Resubmits for PBS and the TaskServer
     * The user guide says how many resubmits to allow for SLURM, PBS and the
       TaskServer (``scheduler = seamm``), and how long PBS must keep finished jobs in
