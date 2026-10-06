@@ -238,8 +238,13 @@ class JobServer(collections.abc.MutableMapping):
             except Exception as e:
                 self.logger.warning(f"Error stopping local job {job_id}: {e}")
         else:
-            slurm_id = data["slurm_job_id"]
+            slurm_id = data.get("slurm_job_id")
             queue = self._resolve_queue(data)
+            if slurm_id is None:
+                self.logger.warning(
+                    f"Job {job_id} has no SLURM job id on record; nothing to cancel."
+                )
+                return
             try:
                 self._backends[queue].cancel(slurm_id)
             except Exception as e:
@@ -599,9 +604,12 @@ class JobServer(collections.abc.MutableMapping):
 
         state = self._job_conclusion(wdir)
         if state is not None:
-            self._annotate_job_data(
-                wdir, {"queue": queue, "slurm_job_id": data["slurm_job_id"]}
-            )
+            # A job reattached at startup may have no SLURM id on record (the
+            # JobServer died mid-submission), so it is recorded only if known.
+            extra = {"queue": queue}
+            if data.get("slurm_job_id") is not None:
+                extra["slurm_job_id"] = data["slurm_job_id"]
+            self._annotate_job_data(wdir, extra)
             self.logger.info(f"Job {job_id}: finalizing as {state!r} (job_data.json).")
             self._finalize_job_status(job_id, state)
             if state == "finished":
@@ -1488,6 +1496,7 @@ class JobServer(collections.abc.MutableMapping):
                 job_id,
                 {
                     "queue": queue,
+                    "slurm_job_id": str(slurm_id) if slurm_id is not None else None,
                     "wdir": wdir,
                     "remote_wdir": remote_wdir,
                     "cmdline": cmdline,
@@ -1585,20 +1594,6 @@ class JobServer(collections.abc.MutableMapping):
             prefix = [str(exe)]
 
         cmd = prefix + [str(job_id), str(wdir), str(self.db_path)]
-
-        # Check if in docker container. Only meaningful for local execution
-        # (local mode, or an on-cluster SLURM JobServer) -- this inspects
-        # *this* host, which is irrelevant for a transport=ssh queue
-        # running on a different host entirely.
-        if not remote:
-            cgroup = Path("/proc/self/cgroup")
-            if (
-                Path("/.dockerenv").is_file()
-                or cgroup.is_file()
-                and "docker" in cgroup.read_text()
-            ):
-                cmd.append("--executor")
-                cmd.append("docker")
 
         # The job must use this JobServer's installation: its code .ini files,
         # data and configuration live under the root. Without --root the job
@@ -1935,7 +1930,7 @@ class JobServer(collections.abc.MutableMapping):
                 # instead of psutil cpu/memory stats.
                 js[job_id] = {
                     "queue": self._resolve_queue(data),
-                    "slurm_job_id": data["slurm_job_id"],
+                    "slurm_job_id": data.get("slurm_job_id"),
                     "resubmit_count": data.get("resubmit_count", 0),
                 }
                 continue

@@ -867,6 +867,53 @@ def test_reattach_job_with_no_recorded_slurm_id_resubmits(db_path, tmp_path):
     assert get_job(db_path, 1)[1]["slurm_job_id"] == "100"
 
 
+def test_reattach_job_that_finished_while_down_is_finalized(db_path, tmp_path):
+    """The JobServer was down while the job finished: its SLURM job is gone and
+    job_data.json says how it ended. Finalizing it read data['slurm_job_id'],
+    which the reattach never passed -- the startup crash-looped with KeyError
+    (ChemAI, 2026-10-06)."""
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(
+        db_path,
+        1,
+        "running",
+        str(wdir),
+        extra_params={"slurm_job_id": "42", "resubmit_count": 0},
+    )
+    (wdir / "job_data.json").write_text('!MolSSI job_data 1.0\n{"state": "finished"}\n')
+
+    js = make_jobserver(db_path, wdir)
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="COMPLETED", category="completed", exit_code="0:0"
+    )
+
+    js._reattach_slurm_jobs()
+
+    assert get_job(db_path, 1)[0] == "finished"
+    assert 1 not in js._jobs
+    assert js._backends["molssi10"].submitted == []  # not resubmitted
+    data = json.loads((wdir / "job_data.json").read_text().split("\n", 1)[1])
+    assert data["slurm_job_id"] == "42" and data["queue"] == "molssi10"
+
+
+def test_reattach_finished_job_with_no_slurm_id_is_finalized(db_path, tmp_path):
+    """No SLURM id on record, but the job left job_data.json: finalized, and
+    the record carries the queue only."""
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))  # no slurm_job_id at all
+    (wdir / "job_data.json").write_text('!MolSSI job_data 1.0\n{"state": "error"}\n')
+
+    js = make_jobserver(db_path, wdir)
+
+    js._reattach_slurm_jobs()
+
+    assert get_job(db_path, 1)[0] == "error"
+    data = json.loads((wdir / "job_data.json").read_text().split("\n", 1)[1])
+    assert "slurm_job_id" not in data and data["queue"] == "molssi10"
+
+
 def test_reattach_no_running_jobs_is_a_no_op(db_path, tmp_path):
     js = make_jobserver(db_path, tmp_path)
     js._reattach_slurm_jobs()  # should not raise, no SLURM calls needed
