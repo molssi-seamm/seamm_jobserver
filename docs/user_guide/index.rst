@@ -56,11 +56,16 @@ see "Multiple queues" below) this JobServer instance can route jobs to:
     partition = batch
     account =
     qos =
+    constraint =
     nodes = 1
     ntasks = 1
+    cpus_per_task = 1
     time = 01:00:00
+    # Set one of these explicitly: a site that reserves the whole node's
+    # memory per job by default will otherwise run one job at a time.
     mem =
-    gpus =
+    mem_per_cpu =
+    gres =
 
     # JobServer behavior, not SLURM directives:
     # how many jobs this instance keeps outstanding in this queue at once
@@ -68,6 +73,8 @@ see "Multiple queues" below) this JobServer instance can route jobs to:
     # how many times to resubmit a job SLURM lost track of (see below)
     # before giving up and marking it "error"
     max_resubmits = 3
+    # seconds between polls of the queue's state (default 60)
+    poll_interval = 60
     # raw shell commands run at the top of the generated sbatch script,
     # before run_from_jobserver -- e.g. for a queue whose own submission
     # environment doesn't already carry whatever a code's own
@@ -116,8 +123,9 @@ PBS queues
 
 A section with ``type = queue`` runs each flowchart as a batch job on the
 queueing system named by ``scheduler`` -- ``slurm`` (the default; ``type =
-slurm`` is the original spelling of this) or ``pbs`` (PBS Professional and
-OpenPBS):
+slurm`` is the original spelling of this), ``pbs`` (PBS Professional and
+OpenPBS), or ``seamm`` for a machine's own TaskServer (``seamm_scheduler``'s
+small queue for a machine without a queueing system):
 
 .. code-block:: ini
 
@@ -316,6 +324,17 @@ what a job's ``parameters["slurm"]`` asks for.
     mem.max = 100G
     time.max = 04:00:00
 
+A cluster section typically lets a job pick a longer walltime, a different QOS
+and more memory per core, within what the account allows:
+
+.. code-block:: ini
+
+    [tinkercliffs.limits]
+    overridable = time, qos, mem_per_cpu
+    qos.choices = tc_normal_base, tc_normal_short
+    time.max = 7-00:00:00
+    mem_per_cpu.max = 120G
+
 The JobServer re-validates every override itself before submitting --
 against ``overridable``, then ``.choices``/``.min``/``.max`` when present --
 regardless of whatever already constrained the request's origin (e.g. a web
@@ -333,7 +352,7 @@ Where a job's tasks run
 
 A section may also say where the *tasks* of a job's flowchart run -- the
 individual calculations that steps hand to ``seamm_exec``'s task layer -- with
-the optional key ``tasks = pool | queue`` and its companions (``scheduler``,
+the optional key ``tasks = pool | taskserver | queue`` and its companions (``scheduler``,
 ``bundle_tasks``, ``bundle_walltime``, ``max_queued_tasks``, ``remote_python``,
 ...; see ``seamm_exec``'s getting-started guide). When a section has
 ``tasks =``, the JobServer writes it into the job's directory as

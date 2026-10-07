@@ -1,6 +1,12 @@
 =======
 History
 =======
+2026.10.7 -- Internal: documentation of the queue file
+    * The user guide lists ``constraint``, ``cpus_per_task``, ``mem_per_cpu``,
+      ``gres`` and ``poll_interval`` with the other keys, shows a cluster's
+      ``.limits`` (time, QOS, memory per core), names ``scheduler = seamm`` and
+      ``tasks = taskserver``; the getting-started page is now about the JobServer.
+
 2026.10.6 -- Bugfix: the JobServer crashed on restart if a job had finished meanwhile
     * When the JobServer restarted and a SLURM job had finished while it was down,
       finalizing that job raised ``KeyError: 'slurm_job_id'``, so the JobServer
