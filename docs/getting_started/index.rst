@@ -2,28 +2,49 @@
 Getting Started
 ***************
 
-Installation
-============
-The SEAMM JobServer step is probably already installed in your SEAMM environment, but
-if not or if you wish to check, follow the directions for the `SEAMM Installer`_. The
-graphical installer is the easiest to use. In the SEAMM conda environment, simply type::
+The JobServer is the service that runs the jobs you submit from the SEAMM GUI
+or the web interface. ``seamm-manager install`` installs it and
+``seamm-manager services start`` runs it as a service of the machine; you
+never start it by hand. ``seamm-manager services status`` shows it running
+beside the web interface::
 
-  seamm-installer
+    seamm-manager services status
 
-or use the shortcut if you installed one. Switch to the second tab, `Components`, and
-check for `quickmin-step`. If it is not installed, or can be updated, check the box
-next to it and click `Install selected` or `Update selected` as appropriate.
+Out of the box it runs each job as a subprocess on its own machine, as many at
+once as it is allowed. One file turns it into a dispatcher that can run jobs
+under the machine's own queueing system or send them to a cluster over ssh:
+``<root>/<name>.ini``, where ``<root>`` is the installation (``~/SEAMM`` by
+default) and ``<name>`` the JobServer's name, which defaults to the hostname.
+A minimal file that sends jobs to a SLURM cluster reached over passwordless
+ssh, with the job directories staged there and back::
 
-The non-graphical installer is also straightforward::
+    [DEFAULT]
+    default = cluster
 
-  seamm-installer install --update seamm-jobserver
+    [cluster]
+    transport = ssh
+    host = cluster
+    export = NONE
+    remote_root = /scratch/me/seamm_jobs
+    remote_run_from_jobserver = /path/to/SEAMM/venv/bin/run_from_jobserver
+    account = myaccount
+    partition = normal
+    ntasks = 4
+    mem_per_cpu = 2G
+    time = 04:00:00
+    max_concurrent_jobs = 20
 
-will ensure both that it is installed and up-to-date.
+    [cluster.limits]
+    overridable = ntasks, mem_per_cpu, time
+    ntasks.max = 64
+    time.max = 2-00:00:00
 
-.. _SEAMM Installer: https://molssi-seamm.github.io/installation/index.html
+The JobServer reads the file when it starts, so restart it after editing::
 
-Replace this!
-=============
-Put an example or two here....
+    seamm-manager services restart
 
-That should be enough to get started. For more detail about the functionality in this plug-in, see the :ref:`User Guide <user-guide>`.
+The :ref:`User Guide <user-guide>` describes every key, several queues in one
+file, PBS, what happens to a job on a remote cluster, per-job resource
+overrides and where a job's calculations run. The main SEAMM documentation
+has a step-by-step how-to, "Configure the JobServer's Queues", with real
+examples.

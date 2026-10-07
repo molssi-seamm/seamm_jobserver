@@ -40,6 +40,7 @@ setup(
     # Which Python importable modules should be included when your package is
     # installed, handled automatically by setuptools. Use 'exclude' to prevent
     # some specific subpackage(s) from being added, if needed
+    python_requires='>=3.12',
     packages=find_packages(include=['seamm_jobserver']),
 
     # Optional include package data to ship with your package. Customize
@@ -74,8 +75,7 @@ setup(
          'later (LGPLv3+)'),
         'Natural Language :: English',
         'Programming Language :: Python :: 3 :: Only',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.12',
         'Topic :: Scientific/Engineering',
         'Topic :: Scientific/Engineering :: Chemistry',
     ],
