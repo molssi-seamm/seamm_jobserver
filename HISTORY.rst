@@ -6,6 +6,7 @@ History
       ``gres`` and ``poll_interval`` with the other keys, shows a cluster's
       ``.limits`` (time, QOS, memory per core), names ``scheduler = seamm`` and
       ``tasks = taskserver``; the getting-started page is now about the JobServer.
+    * Requires Python 3.12.
 
 2026.10.6 -- Bugfix: the JobServer crashed on restart if a job had finished meanwhile
     * When the JobServer restarted and a SLURM job had finished while it was down,
