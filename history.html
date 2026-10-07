@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.10.6 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.10.7 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=ae463d2f"></script>
+    <script src="_static/documentation_options.js?v=0a3eb936"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -62,7 +62,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Credits" href="authors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.6" />
+  <meta name="docsearch:version" content="2026.10.7" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -505,6 +505,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.10.7 – Internal: documentation of the queue file</dt><dd><ul class="simple">
+<li><p>The user guide lists <code class="docutils literal notranslate"><span class="pre">constraint</span></code>, <code class="docutils literal notranslate"><span class="pre">cpus_per_task</span></code>, <code class="docutils literal notranslate"><span class="pre">mem_per_cpu</span></code>,
+<code class="docutils literal notranslate"><span class="pre">gres</span></code> and <code class="docutils literal notranslate"><span class="pre">poll_interval</span></code> with the other keys, shows a cluster’s
+<code class="docutils literal notranslate"><span class="pre">.limits</span></code> (time, QOS, memory per core), names <code class="docutils literal notranslate"><span class="pre">scheduler</span> <span class="pre">=</span> <span class="pre">seamm</span></code> and
+<code class="docutils literal notranslate"><span class="pre">tasks</span> <span class="pre">=</span> <span class="pre">taskserver</span></code>; the getting-started page is now about the JobServer.</p></li>
+<li><p>Requires Python 3.12.</p></li>
+</ul>
+</dd>
 <dt>2026.10.6 – Bugfix: the JobServer crashed on restart if a job had finished meanwhile</dt><dd><ul class="simple">
 <li><p>When the JobServer restarted and a SLURM job had finished while it was down,
 finalizing that job raised <code class="docutils literal notranslate"><span class="pre">KeyError:</span> <span class="pre">'slurm_job_id'</span></code>, so the JobServer

@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.10.6 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.10.7 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=ae463d2f"></script>
+    <script src="../_static/documentation_options.js?v=0a3eb936"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="Getting Started" href="../getting_started/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.6" />
+  <meta name="docsearch:version" content="2026.10.7" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -549,11 +549,16 @@ see “Multiple queues” below) this JobServer instance can route jobs to:</p>
 <span class="na">partition</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">batch</span>
 <span class="na">account</span><span class="w"> </span><span class="o">=</span>
 <span class="na">qos</span><span class="w"> </span><span class="o">=</span>
+<span class="na">constraint</span><span class="w"> </span><span class="o">=</span>
 <span class="na">nodes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1</span>
 <span class="na">ntasks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1</span>
+<span class="na">cpus_per_task</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1</span>
 <span class="na">time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">01:00:00</span>
+<span class="c1"># Set one of these explicitly: a site that reserves the whole node's</span>
+<span class="c1"># memory per job by default will otherwise run one job at a time.</span>
 <span class="na">mem</span><span class="w"> </span><span class="o">=</span>
-<span class="na">gpus</span><span class="w"> </span><span class="o">=</span>
+<span class="na">mem_per_cpu</span><span class="w"> </span><span class="o">=</span>
+<span class="na">gres</span><span class="w"> </span><span class="o">=</span>
 
 <span class="c1"># JobServer behavior, not SLURM directives:</span>
 <span class="c1"># how many jobs this instance keeps outstanding in this queue at once</span>
@@ -561,6 +566,8 @@ see “Multiple queues” below) this JobServer instance can route jobs to:</p>
 <span class="c1"># how many times to resubmit a job SLURM lost track of (see below)</span>
 <span class="c1"># before giving up and marking it "error"</span>
 <span class="na">max_resubmits</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">3</span>
+<span class="c1"># seconds between polls of the queue's state (default 60)</span>
+<span class="na">poll_interval</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">60</span>
 <span class="c1"># raw shell commands run at the top of the generated sbatch script,</span>
 <span class="c1"># before run_from_jobserver -- e.g. for a queue whose own submission</span>
 <span class="c1"># environment doesn't already carry whatever a code's own</span>
@@ -606,8 +613,9 @@ others to a real cluster, from one process:</p>
 <h3>PBS queues<a class="headerlink" href="#pbs-queues" title="Link to this heading">#</a></h3>
 <p>A section with <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">queue</span></code> runs each flowchart as a batch job on the
 queueing system named by <code class="docutils literal notranslate"><span class="pre">scheduler</span></code> – <code class="docutils literal notranslate"><span class="pre">slurm</span></code> (the default; <code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span>
-<span class="pre">slurm</span></code> is the original spelling of this) or <code class="docutils literal notranslate"><span class="pre">pbs</span></code> (PBS Professional and
-OpenPBS):</p>
+<span class="pre">slurm</span></code> is the original spelling of this), <code class="docutils literal notranslate"><span class="pre">pbs</span></code> (PBS Professional and
+OpenPBS), or <code class="docutils literal notranslate"><span class="pre">seamm</span></code> for a machine’s own TaskServer (<code class="docutils literal notranslate"><span class="pre">seamm_scheduler</span></code>’s
+small queue for a machine without a queueing system):</p>
 <div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[molssi10]</span>
 <span class="na">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">queue</span>
 <span class="na">scheduler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">pbs</span>
@@ -788,6 +796,15 @@ what a job’s <code class="docutils literal notranslate"><span class="pre">para
 <span class="na">time.max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">04:00:00</span>
 </pre></div>
 </div>
+<p>A cluster section typically lets a job pick a longer walltime, a different QOS
+and more memory per core, within what the account allows:</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="k">[tinkercliffs.limits]</span>
+<span class="na">overridable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">time, qos, mem_per_cpu</span>
+<span class="na">qos.choices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">tc_normal_base, tc_normal_short</span>
+<span class="na">time.max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">7-00:00:00</span>
+<span class="na">mem_per_cpu.max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">120G</span>
+</pre></div>
+</div>
 <p>The JobServer re-validates every override itself before submitting –
 against <code class="docutils literal notranslate"><span class="pre">overridable</span></code>, then <code class="docutils literal notranslate"><span class="pre">.choices</span></code>/<code class="docutils literal notranslate"><span class="pre">.min</span></code>/<code class="docutils literal notranslate"><span class="pre">.max</span></code> when present –
 regardless of whatever already constrained the request’s origin (e.g. a web
@@ -803,7 +820,7 @@ submission time.</p>
 <h3>Where a job’s tasks run<a class="headerlink" href="#where-a-job-s-tasks-run" title="Link to this heading">#</a></h3>
 <p>A section may also say where the <em>tasks</em> of a job’s flowchart run – the
 individual calculations that steps hand to <code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code>’s task layer – with
-the optional key <code class="docutils literal notranslate"><span class="pre">tasks</span> <span class="pre">=</span> <span class="pre">pool</span> <span class="pre">|</span> <span class="pre">queue</span></code> and its companions (<code class="docutils literal notranslate"><span class="pre">scheduler</span></code>,
+the optional key <code class="docutils literal notranslate"><span class="pre">tasks</span> <span class="pre">=</span> <span class="pre">pool</span> <span class="pre">|</span> <span class="pre">taskserver</span> <span class="pre">|</span> <span class="pre">queue</span></code> and its companions (<code class="docutils literal notranslate"><span class="pre">scheduler</span></code>,
 <code class="docutils literal notranslate"><span class="pre">bundle_tasks</span></code>, <code class="docutils literal notranslate"><span class="pre">bundle_walltime</span></code>, <code class="docutils literal notranslate"><span class="pre">max_queued_tasks</span></code>, <code class="docutils literal notranslate"><span class="pre">remote_python</span></code>,
 …; see <code class="docutils literal notranslate"><span class="pre">seamm_exec</span></code>’s getting-started guide). When a section has
 <code class="docutils literal notranslate"><span class="pre">tasks</span> <span class="pre">=</span></code>, the JobServer writes it into the job’s directory as

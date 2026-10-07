@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Getting Started &#8212; SEAMM Jobserver 2026.10.6 documentation</title>
+    <title>Getting Started &#8212; SEAMM Jobserver 2026.10.7 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=ae463d2f"></script>
+    <script src="../_static/documentation_options.js?v=0a3eb936"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <link rel="prev" title="SEAMM JobServer" href="../index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.6" />
+  <meta name="docsearch:version" content="2026.10.7" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -505,28 +505,52 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                   
   <section id="getting-started">
 <h1>Getting Started<a class="headerlink" href="#getting-started" title="Link to this heading">#</a></h1>
-<section id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
-<p>The SEAMM JobServer step is probably already installed in your SEAMM environment, but
-if not or if you wish to check, follow the directions for the <a class="reference external" href="https://molssi-seamm.github.io/installation/index.html">SEAMM Installer</a>. The
-graphical installer is the easiest to use. In the SEAMM conda environment, simply type:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seamm</span><span class="o">-</span><span class="n">installer</span>
+<p>The JobServer is the service that runs the jobs you submit from the SEAMM GUI
+or the web interface. <code class="docutils literal notranslate"><span class="pre">seamm-manager</span> <span class="pre">install</span></code> installs it and
+<code class="docutils literal notranslate"><span class="pre">seamm-manager</span> <span class="pre">services</span> <span class="pre">start</span></code> runs it as a service of the machine; you
+never start it by hand. <code class="docutils literal notranslate"><span class="pre">seamm-manager</span> <span class="pre">services</span> <span class="pre">status</span></code> shows it running
+beside the web interface:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seamm</span><span class="o">-</span><span class="n">manager</span> <span class="n">services</span> <span class="n">status</span>
 </pre></div>
 </div>
-<p>or use the shortcut if you installed one. Switch to the second tab, <cite>Components</cite>, and
-check for <cite>quickmin-step</cite>. If it is not installed, or can be updated, check the box
-next to it and click <cite>Install selected</cite> or <cite>Update selected</cite> as appropriate.</p>
-<p>The non-graphical installer is also straightforward:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seamm</span><span class="o">-</span><span class="n">installer</span> <span class="n">install</span> <span class="o">--</span><span class="n">update</span> <span class="n">seamm</span><span class="o">-</span><span class="n">jobserver</span>
+<p>Out of the box it runs each job as a subprocess on its own machine, as many at
+once as it is allowed. One file turns it into a dispatcher that can run jobs
+under the machine’s own queueing system or send them to a cluster over ssh:
+<code class="docutils literal notranslate"><span class="pre">&lt;root&gt;/&lt;name&gt;.ini</span></code>, where <code class="docutils literal notranslate"><span class="pre">&lt;root&gt;</span></code> is the installation (<code class="docutils literal notranslate"><span class="pre">~/SEAMM</span></code> by
+default) and <code class="docutils literal notranslate"><span class="pre">&lt;name&gt;</span></code> the JobServer’s name, which defaults to the hostname.
+A minimal file that sends jobs to a SLURM cluster reached over passwordless
+ssh, with the job directories staged there and back:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">DEFAULT</span><span class="p">]</span>
+<span class="n">default</span> <span class="o">=</span> <span class="n">cluster</span>
+
+<span class="p">[</span><span class="n">cluster</span><span class="p">]</span>
+<span class="n">transport</span> <span class="o">=</span> <span class="n">ssh</span>
+<span class="n">host</span> <span class="o">=</span> <span class="n">cluster</span>
+<span class="n">export</span> <span class="o">=</span> <span class="n">NONE</span>
+<span class="n">remote_root</span> <span class="o">=</span> <span class="o">/</span><span class="n">scratch</span><span class="o">/</span><span class="n">me</span><span class="o">/</span><span class="n">seamm_jobs</span>
+<span class="n">remote_run_from_jobserver</span> <span class="o">=</span> <span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">SEAMM</span><span class="o">/</span><span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">run_from_jobserver</span>
+<span class="n">account</span> <span class="o">=</span> <span class="n">myaccount</span>
+<span class="n">partition</span> <span class="o">=</span> <span class="n">normal</span>
+<span class="n">ntasks</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">mem_per_cpu</span> <span class="o">=</span> <span class="mi">2</span><span class="n">G</span>
+<span class="n">time</span> <span class="o">=</span> <span class="mi">04</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
+<span class="n">max_concurrent_jobs</span> <span class="o">=</span> <span class="mi">20</span>
+
+<span class="p">[</span><span class="n">cluster</span><span class="o">.</span><span class="n">limits</span><span class="p">]</span>
+<span class="n">overridable</span> <span class="o">=</span> <span class="n">ntasks</span><span class="p">,</span> <span class="n">mem_per_cpu</span><span class="p">,</span> <span class="n">time</span>
+<span class="n">ntasks</span><span class="o">.</span><span class="n">max</span> <span class="o">=</span> <span class="mi">64</span>
+<span class="n">time</span><span class="o">.</span><span class="n">max</span> <span class="o">=</span> <span class="mi">2</span><span class="o">-</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
 </pre></div>
 </div>
-<p>will ensure both that it is installed and up-to-date.</p>
-</section>
-<section id="replace-this">
-<h2>Replace this!<a class="headerlink" href="#replace-this" title="Link to this heading">#</a></h2>
-<p>Put an example or two here….</p>
-<p>That should be enough to get started. For more detail about the functionality in this plug-in, see the <a class="reference internal" href="../user_guide/index.html#user-guide"><span class="std std-ref">User Guide</span></a>.</p>
-</section>
+<p>The JobServer reads the file when it starts, so restart it after editing:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seamm</span><span class="o">-</span><span class="n">manager</span> <span class="n">services</span> <span class="n">restart</span>
+</pre></div>
+</div>
+<p>The <a class="reference internal" href="../user_guide/index.html#user-guide"><span class="std std-ref">User Guide</span></a> describes every key, several queues in one
+file, PBS, what happens to a job on a remote cluster, per-job resource
+overrides and where a job’s calculations run. The main SEAMM documentation
+has a step-by-step how-to, “Configure the JobServer’s Queues”, with real
+examples.</p>
 </section>
 
 
@@ -567,19 +591,6 @@ next to it and click <cite>Install selected</cite> or <cite>Update selected</cit
                 <dialog id="pst-secondary-sidebar-modal"></dialog>
                 <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
 
-
-  <div class="sidebar-secondary-item">
-<div
-    id="pst-page-navigation-heading-2"
-    class="page-toc tocsection onthispage">
-    <i class="fa-solid fa-list"></i> On this page
-  </div>
-  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
-    <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#replace-this">Replace this!</a></li>
-</ul>
-  </nav></div>
 
   <div class="sidebar-secondary-item">
 
