@@ -1788,12 +1788,15 @@ class JobServer(collections.abc.MutableMapping):
         # A resubmitted job resumes from its checkpoint. In the script, not the
         # environment: queues may run jobs with export=NONE or a clean login.
         resume = f"export {RESUME_ENVIRONMENT}=1\n" if resubmit_count > 0 else ""
+        # exec: the flowchart replaces the batch shell. Otherwise a cancel can kill
+        # the shell first and leave the flowchart, reparented to init, out of reach
+        # of the scheduler's SIGKILL under Slurm's proctrack/linuxproc.
         payload = (
             f"{setup}"
             f"export SEAMM_JOB_ID={shlex.quote(str(job_id))}\n"
             f"export SEAMM_JOBSERVER={shlex.quote(self.options['name'])}\n"
             f"{resume}"
-            f"{quoted_cmd}\n"
+            f"exec {quoted_cmd}\n"
         )
 
         directives = section.merge_overrides(slurm_overrides)

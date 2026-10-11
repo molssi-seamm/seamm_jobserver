@@ -235,6 +235,9 @@ def test_start_job_slurm_script_has_directives_and_no_conda_activate(db_path, tm
     assert "export SEAMM_JOBSERVER=molssi10" in script
     assert "conda activate" not in script
     assert "run_from_jobserver" in script
+    # The flowchart replaces the shell, so a cancel cannot orphan it.
+    (last,) = [line for line in script.splitlines() if "run_from_jobserver" in line]
+    assert last.startswith("exec ")
 
 
 def test_start_job_slurm_script_has_no_setup_by_default(db_path, tmp_path):

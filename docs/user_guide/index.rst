@@ -84,6 +84,8 @@ see "Multiple queues" below) this JobServer instance can route jobs to:
     # default. Multiple commands via ini continuation lines:
     # setup = module load ORCA
     #     module load GCC
+    # run_from_jobserver then replaces the script's shell (exec), so a
+    # cancelled job stops cleanly; nothing can run after it.
 
 A blank value (``account =``) means "don't pass that directive at all" --
 let SLURM's own defaults apply.
