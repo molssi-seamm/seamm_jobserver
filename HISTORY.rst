@@ -1,6 +1,12 @@
 =======
 History
 =======
+2026.10.11 -- Bugfix: a cancelled job could keep running outside the queue
+    * The job script now runs the flowchart with ``exec``, so it replaces the script's
+      shell. Before, cancelling a job could kill the shell first; the flowchart was
+      then reparented to init and, under Slurm's proctrack/linuxproc, the scheduler's
+      SIGKILL no longer reached it, so it kept running outside the queue.
+
 2026.10.7 -- Internal: documentation of the queue file
     * The user guide lists ``constraint``, ``cpus_per_task``, ``mem_per_cpu``,
       ``gres`` and ``poll_interval`` with the other keys, shows a cluster's
