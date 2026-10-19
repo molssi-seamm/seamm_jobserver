@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.10.11 documentation</title>
+    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.10.19 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=912780bd"></script>
+    <script src="../_static/documentation_options.js?v=b2b4b3b2"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.11" />
+  <meta name="docsearch:version" content="2026.10.19" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -646,7 +646,7 @@ row, and issues the real <code class="docutils literal notranslate"><span class=
 
 <dl class="py method">
 <dt class="sig sig-object py" id="seamm_jobserver.jobserver.JobServer.start_job">
-<span class="sig-name descname"><span class="pre">start_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wdir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmdline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">queue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slurm_overrides</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#JobServer.start_job"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer.start_job" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">start_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wdir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cmdline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">queue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slurm_overrides</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resume</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#JobServer.start_job"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer.start_job" title="Link to this definition">#</a></dt>
 <dd><p>Run the given job, locally or via SLURM depending on the type of
 the queue it’s routed to.</p>
 <dl class="field-list simple">
@@ -661,6 +661,9 @@ at all, the job always runs as a local subprocess regardless.</p></li>
 <code class="docutils literal notranslate"><span class="pre">parameters[&quot;slurm&quot;]</span></code>), e.g. <code class="docutils literal notranslate"><span class="pre">{&quot;ntasks&quot;:</span> <span class="pre">4,</span> <span class="pre">&quot;mem&quot;:</span> <span class="pre">&quot;40G&quot;}</span></code>.
 Ignored for a local-mode job. Validated against the queue’s
 <code class="docutils literal notranslate"><span class="pre">limits</span></code> before use – see <code class="docutils literal notranslate"><span class="pre">SlurmSection.merge_overrides</span></code>.</p></li>
+<li><p><strong>resume</strong> (<em>bool</em>) – Ask the flowchart to resume from its checkpoint: a job that was
+killed or failed and is being run again (see the web UI’s resume
+request).</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>

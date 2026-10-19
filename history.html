@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.10.11 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.10.19 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=912780bd"></script>
+    <script src="_static/documentation_options.js?v=b2b4b3b2"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.11" />
+  <meta name="docsearch:version" content="2026.10.19" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -506,6 +506,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.10.19 – Resume a job on request</dt><dd><ul class="simple">
+<li><p>A job sent back to ‘submitted’ with a request to resume (the web UI’s ‘Resume
+job’) is started with SEAMM_RESUME, locally or in its queue, so that it continues
+from its checkpoint. The request is forgotten once the job has started.</p></li>
+</ul>
+</dd>
 <dt>2026.10.11 – Bugfix: a cancelled job could keep running outside the queue</dt><dd><ul class="simple">
 <li><p>The job script now runs the flowchart with <code class="docutils literal notranslate"><span class="pre">exec</span></code>, so it replaces the script’s
 shell. Before, cancelling a job could kill the shell first; the flowchart was

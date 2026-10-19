@@ -6,7 +6,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.11 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.19 documentation</title>
   
   
   
@@ -47,7 +47,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=912780bd"></script>
+    <script src="../../_static/documentation_options.js?v=b2b4b3b2"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -61,7 +61,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.11" />
+  <meta name="docsearch:version" content="2026.10.19" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -1190,13 +1190,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
             <span class="s2">"SELECT id, path, json_extract(parameters, '$.cmdline'),"</span>
             <span class="s2">"       json_extract(parameters, '$.slurm'),"</span>
-            <span class="s2">"       json_extract(parameters, '$.queue')"</span>
+            <span class="s2">"       json_extract(parameters, '$.queue'),"</span>
+            <span class="s2">"       json_extract(parameters, '$.resume')"</span>
             <span class="s2">"  FROM jobs"</span>
             <span class="s2">" WHERE status = 'submitted'"</span>
         <span class="p">)</span>
         <span class="n">rows</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
 
-        <span class="k">for</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">cmdline_json</span><span class="p">,</span> <span class="n">slurm_json</span><span class="p">,</span> <span class="n">requested_queue</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">cmdline_json</span><span class="p">,</span> <span class="n">slurm_json</span><span class="p">,</span> <span class="n">requested_queue</span><span class="p">,</span> <span class="n">resume</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
             <span class="n">queue</span> <span class="o">=</span> <span class="n">requested_queue</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_default_queue</span>
             <span class="k">if</span> <span class="n">queue</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_mark_startup_error</span><span class="p">(</span>
@@ -1218,11 +1219,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">pid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_job</span><span class="p">(</span>
-                    <span class="n">job_id</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="n">queue</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="o">=</span><span class="n">slurm_overrides</span>
+                    <span class="n">job_id</span><span class="p">,</span>
+                    <span class="n">path</span><span class="p">,</span>
+                    <span class="n">cmdline</span><span class="p">,</span>
+                    <span class="n">queue</span><span class="o">=</span><span class="n">queue</span><span class="p">,</span>
+                    <span class="n">slurm_overrides</span><span class="o">=</span><span class="n">slurm_overrides</span><span class="p">,</span>
+                    <span class="n">resume</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">resume</span><span class="p">),</span>
                 <span class="p">)</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_mark_startup_error</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"error starting: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
                 <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">resume</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_clear_resume_request</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span>
 
             <span class="n">available</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span> <span class="o">-=</span> <span class="mi">1</span>
             <span class="n">section</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sections</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span>
@@ -1253,19 +1261,22 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Checking jobs in datastore"</span><span class="p">)</span>
         <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-            <span class="s2">"SELECT id, path, json_extract(parameters, '$.cmdline')"</span>
+            <span class="s2">"SELECT id, path, json_extract(parameters, '$.cmdline'),"</span>
+            <span class="s2">"       json_extract(parameters, '$.resume')"</span>
             <span class="s2">"  FROM jobs"</span>
             <span class="s2">" WHERE status = 'submitted'"</span>
         <span class="p">)</span>
         <span class="n">rows</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
 
-        <span class="k">for</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">cmdline_json</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">cmdline_json</span><span class="p">,</span> <span class="n">resume</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
             <span class="n">cmdline</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">cmdline_json</span><span class="p">)</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">pid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_job</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">)</span>
+                <span class="n">pid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_job</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">resume</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">resume</span><span class="p">))</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_mark_startup_error</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"error starting: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
                 <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">resume</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_clear_resume_request</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span>
 
             <span class="n">current_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
             <span class="n">update_cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
@@ -2048,7 +2059,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
 <div class="viewcode-block" id="JobServer.start_job">
 <a class="viewcode-back" href="../../api/seamm_jobserver.html#seamm_jobserver.jobserver.JobServer.start_job">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">start_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">start_job</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">resume</span><span class="o">=</span><span class="kc">False</span>
+    <span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Run the given job, locally or via SLURM depending on the type of</span>
 <span class="sd">        the queue it's routed to.</span>
 
@@ -2066,6 +2079,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="sd">            ``parameters["slurm"]``), e.g. ``{"ntasks": 4, "mem": "40G"}``.</span>
 <span class="sd">            Ignored for a local-mode job. Validated against the queue's</span>
 <span class="sd">            ``limits`` before use -- see ``SlurmSection.merge_overrides``.</span>
+<span class="sd">        resume : bool</span>
+<span class="sd">            Ask the flowchart to resume from its checkpoint: a job that was</span>
+<span class="sd">            killed or failed and is being run again (see the web UI's resume</span>
+<span class="sd">            request).</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -2091,7 +2108,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="c1"># (transport=ssh) determines the *effective* working directory</span>
             <span class="c1"># -- _build_cmd needs that, not the local wdir, to be correct.</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_start_job_slurm</span><span class="p">(</span>
-                <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="o">=</span><span class="n">slurm_overrides</span> <span class="ow">or</span> <span class="p">{}</span>
+                <span class="n">job_id</span><span class="p">,</span>
+                <span class="n">wdir</span><span class="p">,</span>
+                <span class="n">cmdline</span><span class="p">,</span>
+                <span class="n">queue</span><span class="p">,</span>
+                <span class="n">slurm_overrides</span><span class="o">=</span><span class="n">slurm_overrides</span> <span class="ow">or</span> <span class="p">{},</span>
+                <span class="n">resume</span><span class="o">=</span><span class="n">resume</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
 
@@ -2099,8 +2121,19 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="c1"># local-subprocess path either way.</span>
         <span class="n">cmd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_cmd</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">queue</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">"cmd for </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">cmd</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_start_job_local</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">queue</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_start_job_local</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">resume</span><span class="o">=</span><span class="n">resume</span><span class="p">)</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_clear_resume_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Forget a job's request to resume once it has started, so that only that</span>
+<span class="sd">        start resumes."""</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">"UPDATE jobs SET parameters=json_remove(parameters, '$.resume')"</span>
+            <span class="s2">" WHERE id = ?"</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">job_id</span><span class="p">,),</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_write_target</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">section</span><span class="p">,</span> <span class="n">wdir</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Write ``&lt;job dir&gt;/target.json`` for the evaluator (see</span>
@@ -2286,7 +2319,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="k">return</span> <span class="n">section</span><span class="o">.</span><span class="n">remote_wdir_for</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_start_job_slurm</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">resubmit_count</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="o">=</span><span class="kc">None</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">job_id</span><span class="p">,</span>
+        <span class="n">wdir</span><span class="p">,</span>
+        <span class="n">cmdline</span><span class="p">,</span>
+        <span class="n">queue</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">resubmit_count</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">slurm_overrides</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">resume</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Submit a job to SLURM as a whole-flowchart batch job.</span>
 
@@ -2329,9 +2369,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="n">cmd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_cmd</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">effective_wdir</span><span class="p">,</span> <span class="n">cmdline</span><span class="p">,</span> <span class="n">queue</span><span class="p">)</span>
         <span class="n">quoted_cmd</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">shlex</span><span class="o">.</span><span class="n">quote</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cmd</span><span class="p">)</span>
         <span class="n">setup</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">section</span><span class="o">.</span><span class="n">setup</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span> <span class="k">if</span> <span class="n">section</span><span class="o">.</span><span class="n">setup</span> <span class="k">else</span> <span class="s2">""</span>
-        <span class="c1"># A resubmitted job resumes from its checkpoint. In the script, not the</span>
-        <span class="c1"># environment: queues may run jobs with export=NONE or a clean login.</span>
-        <span class="n">resume</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"export </span><span class="si">{</span><span class="n">RESUME_ENVIRONMENT</span><span class="si">}</span><span class="s2">=1</span><span class="se">\n</span><span class="s2">"</span> <span class="k">if</span> <span class="n">resubmit_count</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">""</span>
+        <span class="c1"># A resubmitted or resumed job resumes from its checkpoint. In the script,</span>
+        <span class="c1"># not the environment: queues may run jobs with export=NONE or a clean login.</span>
+        <span class="n">resume</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"export </span><span class="si">{</span><span class="n">RESUME_ENVIRONMENT</span><span class="si">}</span><span class="s2">=1</span><span class="se">\n</span><span class="s2">"</span> <span class="k">if</span> <span class="n">resubmit_count</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">resume</span> <span class="k">else</span> <span class="s2">""</span>
+        <span class="p">)</span>
         <span class="c1"># exec: the flowchart replaces the batch shell. Otherwise a cancel can kill</span>
         <span class="c1"># the shell first and leave the flowchart, reparented to init, out of reach</span>
         <span class="c1"># of the scheduler's SIGKILL under Slurm's proctrack/linuxproc.</span>
