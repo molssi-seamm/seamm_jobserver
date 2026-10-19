@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.10.19.1 documentation</title>
+    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.10.19.2 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=a5793183"></script>
+    <script src="../_static/documentation_options.js?v=9281bbe9"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.19.1" />
+  <meta name="docsearch:version" content="2026.10.19.2" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -528,6 +528,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <dt class="sig sig-object py" id="seamm_jobserver.jobserver.JobServer">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">seamm_jobserver.jobserver.</span></span><span class="sig-name descname"><span class="pre">JobServer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">logger</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;Logger</span> <span class="pre">seamm_jobserver.jobserver</span> <span class="pre">(WARNING)&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#JobServer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">MutableMapping</span></code></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="seamm_jobserver.jobserver.JobServer.FLOWCHART_CHECK_TIMEOUT">
+<span class="sig-name descname"><span class="pre">FLOWCHART_CHECK_TIMEOUT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">300</span></span><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer.FLOWCHART_CHECK_TIMEOUT" title="Link to this definition">#</a></dt>
+<dd><p>it loads every plug-in.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>How long checking a flowchart may take</p>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="seamm_jobserver.jobserver.JobServer.check_for_finished_jobs">
 <span class="sig-name descname"><span class="pre">check_for_finished_jobs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#JobServer.check_for_finished_jobs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.JobServer.check_for_finished_jobs" title="Link to this definition">#</a></dt>
@@ -777,6 +788,7 @@ JobServer for the SEAMM environment.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-seamm_jobserver.jobserver">seamm_jobserver.jobserver module</a><ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer"><code class="docutils literal notranslate"><span class="pre">JobServer</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.FLOWCHART_CHECK_TIMEOUT"><code class="docutils literal notranslate"><span class="pre">JobServer.FLOWCHART_CHECK_TIMEOUT</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.check_for_finished_jobs"><code class="docutils literal notranslate"><span class="pre">JobServer.check_for_finished_jobs()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.check_for_new_jobs"><code class="docutils literal notranslate"><span class="pre">JobServer.check_for_new_jobs()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.check_for_stopped_jobs"><code class="docutils literal notranslate"><span class="pre">JobServer.check_for_stopped_jobs()</span></code></a></li>
