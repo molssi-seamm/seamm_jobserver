@@ -2455,3 +2455,108 @@ def test_reattach_with_failed_poll_keeps_tracking(db_path, tmp_path):
     status, params = get_job(db_path, 1)
     assert status == "running"
     assert params["slurm_job_id"] == "42"
+
+
+# ---- a flowchart this installation cannot read fails at once -------------------
+
+
+def fake_validate(monkeypatch, tmp_path, problems, calls=None):
+    """Make seamm-flowchart validate (from this environment) report problems."""
+    import seamm_jobserver.jobserver as jobserver_module
+
+    bindir = tmp_path / "venv" / "bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    (bindir / "seamm-flowchart").write_text("")
+    monkeypatch.setattr(jobserver_module.sys, "executable", str(bindir / "python"))
+
+    def run(argv, **kwargs):
+        if calls is not None:
+            calls.append(argv)
+        if problems == "timeout":
+            raise subprocess.TimeoutExpired(argv, 1)
+        result = {"valid": not problems, "problems": problems, "warnings": []}
+        return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(result))
+
+    monkeypatch.setattr(jobserver_module.subprocess, "run", run)
+
+
+def submitted_job(db_path, tmp_path, job_id, flowchart="steps: []\n"):
+    wdir = tmp_path / f"Job_{job_id}"
+    wdir.mkdir()
+    (wdir / "flowchart.flow").write_text(flowchart)
+    insert_job(db_path, job_id, "submitted", str(wdir))
+    return wdir
+
+
+import subprocess  # noqa: E402
+
+
+def test_unreadable_flowchart_is_a_startup_error(db_path, tmp_path, monkeypatch):
+    """A flowchart made with a newer plug-in fails at once with the reason in
+    job.out, instead of after waiting in a queue (2026-10-19, KeyError: 'scale
+    ion charges' on ChemAI)."""
+    reason = "Step 3.2 (Initialization) has the parameter 'scale ion charges'"
+    fake_validate(monkeypatch, tmp_path, [f"Could not read the flowchart: {reason}"])
+    wdir = submitted_job(db_path, tmp_path, 1)
+    js = make_local_jobserver(db_path)
+    started = []
+    monkeypatch.setattr(
+        js, "_start_job_local", lambda *a, **k: started.append(a) or 1234
+    )
+
+    js.check_for_new_jobs()
+
+    assert started == []
+    assert get_job(db_path, 1)[0] == "startup error"
+    assert reason in (wdir / "job.out").read_text()
+
+
+def test_readable_flowchart_is_checked_once(db_path, tmp_path, monkeypatch):
+    """Other problems do not stop a job, and each distinct flowchart is checked
+    once (a batch of jobs shares one)."""
+    calls = []
+    fake_validate(monkeypatch, tmp_path, ["The loop has no body."], calls)
+    for job_id in (1, 2):
+        submitted_job(db_path, tmp_path, job_id)
+    js = make_local_jobserver(db_path)
+    started = []
+    monkeypatch.setattr(
+        js, "_start_job_local", lambda *a, **k: started.append(a[0]) or 1234
+    )
+
+    js.check_for_new_jobs()
+
+    assert sorted(started) == [1, 2]
+    assert len(calls) == 1
+    assert get_job(db_path, 1)[0] == "running"
+
+
+def test_flowchart_check_that_fails_lets_the_job_run(db_path, tmp_path, monkeypatch):
+    fake_validate(monkeypatch, tmp_path, "timeout")
+    submitted_job(db_path, tmp_path, 1)
+    js = make_local_jobserver(db_path)
+    started = []
+    monkeypatch.setattr(
+        js, "_start_job_local", lambda *a, **k: started.append(a[0]) or 1234
+    )
+
+    js.check_for_new_jobs()
+
+    assert started == [1]
+
+
+def test_remote_queue_flowchart_is_not_checked(db_path, tmp_path, monkeypatch):
+    """A job for another installation (transport = ssh) is not checked here: its
+    plug-ins may differ from this one's."""
+    calls = []
+    fake_validate(
+        monkeypatch, tmp_path, ["Could not read the flowchart: old here"], calls
+    )
+    wdir = submitted_job(db_path, tmp_path, 1)
+    js = make_ssh_jobserver(db_path)
+
+    js.check_for_new_jobs()
+
+    assert calls == []
+    assert len(js._backends["molssi10"].submitted) == 1
+    assert not (wdir / "job.out").exists()

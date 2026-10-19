@@ -4,6 +4,7 @@
 
 import collections.abc
 from datetime import datetime, timezone
+import hashlib
 import json
 import logging
 import os
@@ -103,6 +104,9 @@ class JobServer(collections.abc.MutableMapping):
         self._db_path = None
         self._tasks = set()
         self._jobs = {}
+        # Whether each flowchart (by its SHA-256) can be read with this
+        # installation's plug-ins: None if so, else why not (see _check_flowchart)
+        self._flowchart_checks = {}
         # Every cluster/queue target this instance can route jobs to (from
         # <root>/<jobserver-name>.ini), keyed by section name -- empty
         # means "no such file," i.e. every job runs as an uncapped local
@@ -1679,6 +1683,12 @@ class JobServer(collections.abc.MutableMapping):
 
         section = self._sections.get(queue) if queue is not None else None
 
+        # A job that runs on this installation is checked first: a flowchart its
+        # plug-ins cannot read fails now, not after waiting in a queue.
+        remote = section is not None and section.is_batch and section.transport == "ssh"
+        if not remote:
+            self._check_flowchart(job_id, wdir)
+
         # A target that says where the evaluator's tasks run is written into
         # the job directory, where the evaluator finds it wherever it runs
         # (staged with the job for a remote SLURM queue). Sections without
@@ -1705,6 +1715,72 @@ class JobServer(collections.abc.MutableMapping):
         cmd = self._build_cmd(job_id, wdir, cmdline, queue)
         self.logger.debug(f"cmd for {job_id}: {cmd}")
         return self._start_job_local(job_id, wdir, cmd, queue, resume=resume)
+
+    #: How long checking a flowchart may take: it loads every plug-in.
+    FLOWCHART_CHECK_TIMEOUT = 300
+
+    def _check_flowchart(self, job_id, wdir):
+        """Stop a job whose flowchart this installation's plug-ins cannot read.
+
+        Usually the flowchart was made with a newer version of a plug-in, whose
+        parameters the installed one does not know. Found here, the job fails at
+        once with the reason in its job.out, instead of after waiting in a queue.
+        ``seamm-flowchart validate`` from this JobServer's environment reads it, as
+        the job's ``run_from_jobserver`` would; each distinct flowchart is checked
+        once. Only a flowchart that cannot be read stops the job: the other
+        problems that validate reports are logged. If the check itself cannot be
+        made, the job runs as before.
+
+        Raises
+        ------
+        RuntimeError
+            If the flowchart cannot be read, with the reason.
+        """
+        path = Path(wdir) / "flowchart.flow"
+        try:
+            text = path.read_bytes()
+        except OSError:
+            return
+        digest = hashlib.sha256(text).hexdigest()
+        if digest not in self._flowchart_checks:
+            self._flowchart_checks[digest] = self._read_problem(job_id, path)
+        problem = self._flowchart_checks[digest]
+        if problem is None:
+            return
+        message = (
+            f"The flowchart cannot be run here: {problem}\n"
+            "The job was not started.\n"
+        )
+        try:
+            (Path(wdir) / "job.out").write_text(message)
+        except OSError as e:
+            self.logger.warning(f"Job {job_id}: could not write job.out: {e}")
+        raise RuntimeError(problem)
+
+    def _read_problem(self, job_id, path):
+        """Why this installation cannot read a flowchart, or None if it can (or if
+        that cannot be found out)."""
+        validate = Path(sys.executable).parent / "seamm-flowchart"
+        if not validate.exists():
+            return None
+        try:
+            result = subprocess.run(
+                [str(validate), "validate", str(path), "--json"],
+                capture_output=True,
+                text=True,
+                timeout=self.FLOWCHART_CHECK_TIMEOUT,
+            )
+            data = json.loads(result.stdout)
+        except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+            self.logger.warning(f"Job {job_id}: could not check the flowchart: {e}")
+            return None
+        unreadable = "Could not read the flowchart: "
+        for problem in data.get("problems") or []:
+            if problem.startswith(unreadable):
+                return problem[len(unreadable) :]
+        for problem in data.get("problems") or []:
+            self.logger.info(f"Job {job_id}: the flowchart check found: {problem}")
+        return None
 
     def _clear_resume_request(self, job_id):
         """Forget a job's request to resume once it has started, so that only that
