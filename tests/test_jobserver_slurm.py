@@ -2303,3 +2303,155 @@ def test_local_job_resumes_when_asked(db_path, tmp_path, monkeypatch):
     assert started == [True]
     status, params = get_job(db_path, 1)
     assert status == "running" and "resume" not in params
+
+
+# ---- a job missing from a poll is not resubmitted while it may still exist ----
+
+
+class FakeScheduler:
+    """The scheduler half of a backend: whether the last poll failed, and
+    whether jobs can be looked up by name."""
+
+    def __init__(self, can_find=True):
+        self.poll_failed = False
+        self.can_find = can_find
+
+    def find_cmd(self, job_name):
+        return ["squeue", f"--name={job_name}"] if self.can_find else None
+
+
+class FakeFindingBackend(FakeSlurmBackend):
+    """A FakeSlurmBackend whose poll can fail and whose jobs can be found by name."""
+
+    def __init__(self, can_find=True):
+        super().__init__()
+        self.scheduler = FakeScheduler(can_find)
+        self.fail_poll = False
+        self.by_name = {}  # job name -> list of ids, or None if unknown
+        self.found = []  # job names looked up, in order
+
+    def poll_many(self, job_ids):
+        self.scheduler.poll_failed = self.fail_poll
+        if self.fail_poll:
+            return {}
+        return super().poll_many(job_ids)
+
+    def find_jobs(self, job_name):
+        self.found.append(job_name)
+        return self.by_name.get(job_name, [])
+
+
+def make_finding_jobserver(db_path, wdir, can_find=True):
+    js = make_jobserver(db_path, wdir)
+    js._backends["molssi10"] = FakeFindingBackend(can_find)
+    return js
+
+
+def track(js, wdir, job_id=1, slurm_id="42"):
+    js._jobs[job_id] = {
+        "mode": "slurm",
+        "slurm_job_id": slurm_id,
+        "wdir": str(wdir),
+        "cmdline": ["run_from_jobserver"],
+        "resubmit_count": 0,
+    }
+    js._times[job_id] = {}
+
+
+def test_failed_poll_does_not_resubmit(db_path, tmp_path):
+    """A poll that could not ask the queue (2026-10-19 on ChemAI: every tracked
+    TinkerCliffs job, running ones too, was resubmitted)."""
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+    js = make_finding_jobserver(db_path, wdir)
+    track(js, wdir)
+    js._backends["molssi10"].fail_poll = True
+
+    js.check_for_finished_jobs()
+
+    assert js._backends["molssi10"].submitted == []
+    assert js._jobs[1]["slurm_job_id"] == "42"
+
+
+def test_missing_job_still_queued_by_name_is_not_resubmitted(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir), extra_params={"slurm_job_id": "42"})
+    js = make_finding_jobserver(db_path, wdir)
+    track(js, wdir)
+    backend = js._backends["molssi10"]
+    backend.by_name["seamm-1"] = ["43"]
+    backend.statuses["43"] = JobStatus(job_id="43", state="RUNNING", category="running")
+
+    js.check_for_finished_jobs()
+
+    assert backend.submitted == []
+    assert backend.found == ["seamm-1"]
+    assert js._jobs[1]["slurm_job_id"] == "43"
+    assert get_job(db_path, 1)[1]["slurm_job_id"] == "43"
+
+
+def test_missing_job_found_only_finished_is_resubmitted(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+    js = make_finding_jobserver(db_path, wdir)
+    track(js, wdir)
+    backend = js._backends["molssi10"]
+    backend.by_name["seamm-1"] = ["43"]
+    backend.statuses["43"] = JobStatus(job_id="43", state="FAILED", category="failed")
+
+    js.check_for_finished_jobs()
+
+    assert len(backend.submitted) == 1
+    assert js._jobs[1]["slurm_job_id"] == "100"
+
+
+def test_missing_job_name_lookup_failing_is_checked_again(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+    js = make_finding_jobserver(db_path, wdir)
+    track(js, wdir)
+    js._backends["molssi10"].by_name["seamm-1"] = None
+
+    js.check_for_finished_jobs()
+
+    assert js._backends["molssi10"].submitted == []
+    assert js._jobs[1]["slurm_job_id"] == "42"
+
+
+def test_missing_job_without_name_lookup_is_resubmitted(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+    js = make_finding_jobserver(db_path, wdir, can_find=False)
+    track(js, wdir)
+
+    js.check_for_finished_jobs()
+
+    assert len(js._backends["molssi10"].submitted) == 1
+    assert js._backends["molssi10"].found == []
+
+
+def test_reattach_with_failed_poll_keeps_tracking(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(
+        db_path,
+        1,
+        "running",
+        str(wdir),
+        extra_params={"slurm_job_id": "42", "resubmit_count": 0},
+    )
+    js = make_finding_jobserver(db_path, wdir)
+    js._backends["molssi10"].fail_poll = True
+
+    js._reattach_slurm_jobs()
+
+    assert js._backends["molssi10"].submitted == []
+    assert js._jobs[1]["slurm_job_id"] == "42"
+    status, params = get_job(db_path, 1)
+    assert status == "running"
+    assert params["slurm_job_id"] == "42"

@@ -23,7 +23,7 @@ import fasteners
 import seamm_jobserver
 import seamm_util
 from seamm_scheduler.config import list_sections, load_slurm_config
-from seamm_scheduler.scheduler import get_scheduler
+from seamm_scheduler.scheduler import JobStatus, get_scheduler
 from seamm_scheduler.script import build_script
 from seamm_scheduler.stage import STAGE_LOCK_FILENAME, StageError
 
@@ -380,9 +380,16 @@ class JobServer(collections.abc.MutableMapping):
             by_queue.setdefault(queue, []).append(job_id)
 
         statuses_by_queue = {}
+        failed_queues = set()
         for queue, job_ids in by_queue.items():
             slurm_ids = [self._jobs[jid]["slurm_job_id"] for jid in job_ids]
             statuses_by_queue[queue] = self._backends[queue].poll_many(slurm_ids)
+            if self._poll_failed(queue):
+                failed_queues.add(queue)
+                self.logger.warning(
+                    f"Could not get the status of all the jobs in queue {queue}; "
+                    "the ones not reported are checked again next cycle."
+                )
 
         # Snapshot: _finalize_or_resubmit_slurm_job may resubmit, which
         # mutates self._jobs/_times for job_id in place (new slurm_job_id)
@@ -401,6 +408,17 @@ class JobServer(collections.abc.MutableMapping):
                 continue
 
             if status is None:
+                live_id = self._still_queued(
+                    job_id,
+                    queue,
+                    slurm_id,
+                    data.get("slurm_overrides"),
+                    queue in failed_queues,
+                )
+                if live_id is not None:
+                    if live_id != slurm_id:
+                        data["slurm_job_id"] = live_id
+                    continue
                 self.logger.warning(
                     f"Job {job_id} (slurm_job_id={slurm_id}) is no longer "
                     "known to SLURM."
@@ -425,6 +443,97 @@ class JobServer(collections.abc.MutableMapping):
         for job_id in finished:
             del self._jobs[job_id]
             del self._times[job_id]
+
+    def _poll_failed(self, queue):
+        """Whether the last poll of ``queue`` could not tell which jobs exist."""
+        scheduler = getattr(self._backends[queue], "scheduler", None)
+        return bool(getattr(scheduler, "poll_failed", False))
+
+    def _still_queued(self, job_id, queue, slurm_id, slurm_overrides, poll_failed):
+        """Check that a job the queue's poll did not report is really gone.
+
+        A job missing from a poll is resubmitted, so a mistake starts a second
+        copy of a job that is still running, in the same directory. Two checks
+        come first: the poll must have worked, and the queue must have no queued
+        or running job with the job's name (it may be under another id).
+
+        Parameters
+        ----------
+        job_id : int
+            The SEAMM job id.
+        queue : str
+            The queue the job was submitted to.
+        slurm_id : str or None
+            The scheduler's id for the job, if known.
+        slurm_overrides : dict or None
+            The job's directive overrides, which may name the job.
+        poll_failed : bool
+            Whether the poll could not ask the queue about every job.
+
+        Returns
+        -------
+        str or None
+            The id to keep tracking the job under -- ``slurm_id``, or the id of a
+            live job with its name -- if the job may still exist; None if it is gone.
+        """
+        if poll_failed and slurm_id is not None:
+            return slurm_id
+
+        backend = self._backends[queue]
+        scheduler = getattr(backend, "scheduler", None)
+        try:
+            directives = self._sections[queue].merge_overrides(slurm_overrides or {})
+        except ValueError:
+            directives = {}
+        job_name = directives.get("job_name") or f"seamm-{job_id}"
+        if scheduler is None or scheduler.find_cmd(job_name) is None:
+            # This scheduler cannot be asked; the poll is all there is.
+            return None
+
+        ids = backend.find_jobs(job_name)
+        if ids is None:
+            if slurm_id is None:
+                return None
+            self.logger.warning(
+                f"Job {job_id} (slurm_job_id={slurm_id}) was not reported by "
+                f"queue {queue}, which could not be asked for it by name; will "
+                "check again next cycle."
+            )
+            return slurm_id
+        if not ids:
+            return None
+
+        # The name lookup may include finished jobs; only a live one counts.
+        statuses = backend.poll_many(ids)
+        if self._poll_failed(queue):
+            return slurm_id
+        live = [
+            str(i)
+            for i in ids
+            if (s := statuses.get(str(i))) is not None and not s.is_terminal
+        ]
+        if not live:
+            return None
+        live_id = slurm_id if slurm_id in live else live[-1]
+        if live_id == slurm_id:
+            self.logger.warning(
+                f"Job {job_id} (slurm_job_id={slurm_id}) was not reported by "
+                f"queue {queue}, but is still there."
+            )
+        else:
+            self.logger.warning(
+                f"Job {job_id} (slurm_job_id={slurm_id}) is still in queue "
+                f"{queue} as {live_id}; tracking that."
+            )
+            cursor = self.db.cursor()
+            cursor.execute(
+                "UPDATE jobs"
+                "   SET parameters = json_set(jobs.parameters, '$.slurm_job_id', ?)"
+                " WHERE id = ?",
+                (live_id, job_id),
+            )
+            self.db.commit()
+        return live_id
 
     def _get_job_status(self, job_id):
         """The current ``jobs.status`` value for a job, from the datastore."""
@@ -1417,6 +1526,7 @@ class JobServer(collections.abc.MutableMapping):
             queue: self._backends[queue].poll_many(ids)
             for queue, ids in by_queue.items()
         }
+        failed_queues = {queue for queue in by_queue if self._poll_failed(queue)}
 
         for (
             job_id,
@@ -1462,6 +1572,22 @@ class JobServer(collections.abc.MutableMapping):
 
             statuses = statuses_by_queue.get(queue, {})
             status = statuses.get(str(slurm_id)) if slurm_id is not None else None
+            if status is None:
+                live_id = self._still_queued(
+                    job_id,
+                    queue,
+                    str(slurm_id) if slurm_id is not None else None,
+                    slurm_overrides,
+                    queue in failed_queues,
+                )
+                if live_id is not None:
+                    # Tracked as live; the next poll cycle sorts it out.
+                    slurm_id = live_id
+                    status = JobStatus(
+                        job_id=live_id, state="UNKNOWN", category="unknown"
+                    )
+                    if remote_wdir is None and section.transport == "ssh":
+                        remote_wdir = self._remote_wdir(wdir, queue)
             if status is not None and not status.is_terminal:
                 self._jobs[job_id] = {
                     "mode": "slurm",

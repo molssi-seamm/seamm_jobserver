@@ -1,6 +1,15 @@
 =======
 History
 =======
+2026.10.19.1 -- Bugfix: jobs still in the queue were submitted a second time
+    * A job that a status query of its queue did not report was taken to be lost and
+      submitted again, even when the query itself had failed. A short failure on
+      TinkerCliffs then resubmitted every job, the running ones too; the two copies ran
+      in the same directory and the originals crashed. A job missing from a query is
+      now resubmitted only if the query worked and the queue has no queued or running
+      job with its name; otherwise it is checked again on the next cycle, or tracked
+      under the id it is found with. The same holds when the JobServer restarts.
+
 2026.10.19 -- Resume a job on request
     * A job sent back to 'submitted' with a request to resume (the web UI's 'Resume
       job') is started with SEAMM_RESUME, locally or in its queue, so that it continues
