@@ -680,13 +680,14 @@ class JobServer(collections.abc.MutableMapping):
         cursor.execute(
             "SELECT id, path, json_extract(parameters, '$.cmdline'),"
             "       json_extract(parameters, '$.slurm'),"
-            "       json_extract(parameters, '$.queue')"
+            "       json_extract(parameters, '$.queue'),"
+            "       json_extract(parameters, '$.resume')"
             "  FROM jobs"
             " WHERE status = 'submitted'"
         )
         rows = cursor.fetchall()
 
-        for job_id, path, cmdline_json, slurm_json, requested_queue in rows:
+        for job_id, path, cmdline_json, slurm_json, requested_queue, resume in rows:
             queue = requested_queue or self._default_queue
             if queue is None:
                 self._mark_startup_error(
@@ -708,11 +709,18 @@ class JobServer(collections.abc.MutableMapping):
 
             try:
                 pid = self.start_job(
-                    job_id, path, cmdline, queue=queue, slurm_overrides=slurm_overrides
+                    job_id,
+                    path,
+                    cmdline,
+                    queue=queue,
+                    slurm_overrides=slurm_overrides,
+                    resume=bool(resume),
                 )
             except Exception as e:
                 self._mark_startup_error(job_id, f"error starting: {e}")
                 continue
+            if resume:
+                self._clear_resume_request(job_id)
 
             available[queue] -= 1
             section = self._sections[queue]
@@ -742,19 +750,22 @@ class JobServer(collections.abc.MutableMapping):
         cursor = self.db.cursor()
         self.logger.debug("Checking jobs in datastore")
         cursor.execute(
-            "SELECT id, path, json_extract(parameters, '$.cmdline')"
+            "SELECT id, path, json_extract(parameters, '$.cmdline'),"
+            "       json_extract(parameters, '$.resume')"
             "  FROM jobs"
             " WHERE status = 'submitted'"
         )
         rows = cursor.fetchall()
 
-        for job_id, path, cmdline_json in rows:
+        for job_id, path, cmdline_json, resume in rows:
             cmdline = json.loads(cmdline_json)
             try:
-                pid = self.start_job(job_id, path, cmdline)
+                pid = self.start_job(job_id, path, cmdline, resume=bool(resume))
             except Exception as e:
                 self._mark_startup_error(job_id, f"error starting: {e}")
                 continue
+            if resume:
+                self._clear_resume_request(job_id)
 
             current_time = datetime.now(timezone.utc)
             update_cursor = self.db.cursor()
@@ -1505,7 +1516,9 @@ class JobServer(collections.abc.MutableMapping):
                 resubmit_count,
             )
 
-    def start_job(self, job_id, wdir, cmdline="", queue=None, slurm_overrides=None):
+    def start_job(
+        self, job_id, wdir, cmdline="", queue=None, slurm_overrides=None, resume=False
+    ):
         """Run the given job, locally or via SLURM depending on the type of
         the queue it's routed to.
 
@@ -1523,6 +1536,10 @@ class JobServer(collections.abc.MutableMapping):
             ``parameters["slurm"]``), e.g. ``{"ntasks": 4, "mem": "40G"}``.
             Ignored for a local-mode job. Validated against the queue's
             ``limits`` before use -- see ``SlurmSection.merge_overrides``.
+        resume : bool
+            Ask the flowchart to resume from its checkpoint: a job that was
+            killed or failed and is being run again (see the web UI's resume
+            request).
 
         Returns
         -------
@@ -1548,7 +1565,12 @@ class JobServer(collections.abc.MutableMapping):
             # (transport=ssh) determines the *effective* working directory
             # -- _build_cmd needs that, not the local wdir, to be correct.
             self._start_job_slurm(
-                job_id, wdir, cmdline, queue, slurm_overrides=slurm_overrides or {}
+                job_id,
+                wdir,
+                cmdline,
+                queue,
+                slurm_overrides=slurm_overrides or {},
+                resume=resume,
             )
             return None
 
@@ -1556,7 +1578,18 @@ class JobServer(collections.abc.MutableMapping):
         # local-subprocess path either way.
         cmd = self._build_cmd(job_id, wdir, cmdline, queue)
         self.logger.debug(f"cmd for {job_id}: {cmd}")
-        return self._start_job_local(job_id, wdir, cmd, queue)
+        return self._start_job_local(job_id, wdir, cmd, queue, resume=resume)
+
+    def _clear_resume_request(self, job_id):
+        """Forget a job's request to resume once it has started, so that only that
+        start resumes."""
+        cursor = self.db.cursor()
+        cursor.execute(
+            "UPDATE jobs SET parameters=json_remove(parameters, '$.resume')"
+            " WHERE id = ?",
+            (job_id,),
+        )
+        self.db.commit()
 
     def _write_target(self, section, wdir):
         """Write ``<job dir>/target.json`` for the evaluator (see
@@ -1742,7 +1775,14 @@ class JobServer(collections.abc.MutableMapping):
         return section.remote_wdir_for(wdir)
 
     def _start_job_slurm(
-        self, job_id, wdir, cmdline, queue=None, resubmit_count=0, slurm_overrides=None
+        self,
+        job_id,
+        wdir,
+        cmdline,
+        queue=None,
+        resubmit_count=0,
+        slurm_overrides=None,
+        resume=False,
     ):
         """Submit a job to SLURM as a whole-flowchart batch job.
 
@@ -1785,9 +1825,11 @@ class JobServer(collections.abc.MutableMapping):
         cmd = self._build_cmd(job_id, effective_wdir, cmdline, queue)
         quoted_cmd = " ".join(shlex.quote(c) for c in cmd)
         setup = f"{section.setup}\n" if section.setup else ""
-        # A resubmitted job resumes from its checkpoint. In the script, not the
-        # environment: queues may run jobs with export=NONE or a clean login.
-        resume = f"export {RESUME_ENVIRONMENT}=1\n" if resubmit_count > 0 else ""
+        # A resubmitted or resumed job resumes from its checkpoint. In the script,
+        # not the environment: queues may run jobs with export=NONE or a clean login.
+        resume = (
+            f"export {RESUME_ENVIRONMENT}=1\n" if resubmit_count > 0 or resume else ""
+        )
         # exec: the flowchart replaces the batch shell. Otherwise a cancel can kill
         # the shell first and leave the flowchart, reparented to init, out of reach
         # of the scheduler's SIGKILL under Slurm's proctrack/linuxproc.
