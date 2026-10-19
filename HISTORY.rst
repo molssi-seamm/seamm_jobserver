@@ -1,6 +1,14 @@
 =======
 History
 =======
+2026.10.19.2 -- A flowchart that cannot be run here fails at once
+    * Before starting a job that runs on its own installation, the JobServer checks
+      that the installation's plug-ins can read the flowchart. A flowchart made with a
+      newer version of a plug-in may have parameters an older one does not know; such
+      a job now fails at once, with the reason in its job.out, instead of after
+      waiting in a queue. Each distinct flowchart is checked once. Jobs for another
+      installation (transport = ssh) are not checked, since its plug-ins may differ.
+
 2026.10.19.1 -- Bugfix: jobs still in the queue were submitted a second time
     * A job that a status query of its queue did not report was taken to be lost and
       submitted again, even when the query itself had failed. A short failure on
