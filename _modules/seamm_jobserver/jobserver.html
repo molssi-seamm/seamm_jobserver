@@ -6,7 +6,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.19 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.19.1 documentation</title>
   
   
   
@@ -47,7 +47,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=b2b4b3b2"></script>
+    <script src="../../_static/documentation_options.js?v=a5793183"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -61,7 +61,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.19" />
+  <meta name="docsearch:version" content="2026.10.19.1" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -511,7 +511,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="kn">import</span><span class="w"> </span><span class="nn">seamm_jobserver</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">seamm_util</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">list_sections</span><span class="p">,</span> <span class="n">load_slurm_config</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.scheduler</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_scheduler</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.scheduler</span><span class="w"> </span><span class="kn">import</span> <span class="n">JobStatus</span><span class="p">,</span> <span class="n">get_scheduler</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.script</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_script</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.stage</span><span class="w"> </span><span class="kn">import</span> <span class="n">STAGE_LOCK_FILENAME</span><span class="p">,</span> <span class="n">StageError</span>
 
@@ -888,9 +888,16 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="n">by_queue</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span>
 
         <span class="n">statuses_by_queue</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">failed_queues</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
         <span class="k">for</span> <span class="n">queue</span><span class="p">,</span> <span class="n">job_ids</span> <span class="ow">in</span> <span class="n">by_queue</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="n">slurm_ids</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">[</span><span class="n">jid</span><span class="p">][</span><span class="s2">"slurm_job_id"</span><span class="p">]</span> <span class="k">for</span> <span class="n">jid</span> <span class="ow">in</span> <span class="n">job_ids</span><span class="p">]</span>
             <span class="n">statuses_by_queue</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backends</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">poll_many</span><span class="p">(</span><span class="n">slurm_ids</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_poll_failed</span><span class="p">(</span><span class="n">queue</span><span class="p">):</span>
+                <span class="n">failed_queues</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Could not get the status of all the jobs in queue </span><span class="si">{</span><span class="n">queue</span><span class="si">}</span><span class="s2">; "</span>
+                    <span class="s2">"the ones not reported are checked again next cycle."</span>
+                <span class="p">)</span>
 
         <span class="c1"># Snapshot: _finalize_or_resubmit_slurm_job may resubmit, which</span>
         <span class="c1"># mutates self._jobs/_times for job_id in place (new slurm_job_id)</span>
@@ -909,6 +916,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <span class="k">continue</span>
 
             <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">live_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_still_queued</span><span class="p">(</span>
+                    <span class="n">job_id</span><span class="p">,</span>
+                    <span class="n">queue</span><span class="p">,</span>
+                    <span class="n">slurm_id</span><span class="p">,</span>
+                    <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"slurm_overrides"</span><span class="p">),</span>
+                    <span class="n">queue</span> <span class="ow">in</span> <span class="n">failed_queues</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">live_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">live_id</span> <span class="o">!=</span> <span class="n">slurm_id</span><span class="p">:</span>
+                        <span class="n">data</span><span class="p">[</span><span class="s2">"slurm_job_id"</span><span class="p">]</span> <span class="o">=</span> <span class="n">live_id</span>
+                    <span class="k">continue</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (slurm_job_id=</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">) is no longer "</span>
                     <span class="s2">"known to SLURM."</span>
@@ -933,6 +951,97 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="k">for</span> <span class="n">job_id</span> <span class="ow">in</span> <span class="n">finished</span><span class="p">:</span>
             <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
             <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_times</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_poll_failed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queue</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Whether the last poll of ``queue`` could not tell which jobs exist."""</span>
+        <span class="n">scheduler</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_backends</span><span class="p">[</span><span class="n">queue</span><span class="p">],</span> <span class="s2">"scheduler"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">scheduler</span><span class="p">,</span> <span class="s2">"poll_failed"</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_still_queued</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">slurm_id</span><span class="p">,</span> <span class="n">slurm_overrides</span><span class="p">,</span> <span class="n">poll_failed</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Check that a job the queue's poll did not report is really gone.</span>
+
+<span class="sd">        A job missing from a poll is resubmitted, so a mistake starts a second</span>
+<span class="sd">        copy of a job that is still running, in the same directory. Two checks</span>
+<span class="sd">        come first: the poll must have worked, and the queue must have no queued</span>
+<span class="sd">        or running job with the job's name (it may be under another id).</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        job_id : int</span>
+<span class="sd">            The SEAMM job id.</span>
+<span class="sd">        queue : str</span>
+<span class="sd">            The queue the job was submitted to.</span>
+<span class="sd">        slurm_id : str or None</span>
+<span class="sd">            The scheduler's id for the job, if known.</span>
+<span class="sd">        slurm_overrides : dict or None</span>
+<span class="sd">            The job's directive overrides, which may name the job.</span>
+<span class="sd">        poll_failed : bool</span>
+<span class="sd">            Whether the poll could not ask the queue about every job.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        str or None</span>
+<span class="sd">            The id to keep tracking the job under -- ``slurm_id``, or the id of a</span>
+<span class="sd">            live job with its name -- if the job may still exist; None if it is gone.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="n">poll_failed</span> <span class="ow">and</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">slurm_id</span>
+
+        <span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backends</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span>
+        <span class="n">scheduler</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">backend</span><span class="p">,</span> <span class="s2">"scheduler"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">directives</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sections</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">merge_overrides</span><span class="p">(</span><span class="n">slurm_overrides</span> <span class="ow">or</span> <span class="p">{})</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="n">directives</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">job_name</span> <span class="o">=</span> <span class="n">directives</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"job_name"</span><span class="p">)</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">"seamm-</span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">"</span>
+        <span class="k">if</span> <span class="n">scheduler</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">find_cmd</span><span class="p">(</span><span class="n">job_name</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># This scheduler cannot be asked; the poll is all there is.</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">ids</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">find_jobs</span><span class="p">(</span><span class="n">job_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ids</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (slurm_job_id=</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">) was not reported by "</span>
+                <span class="sa">f</span><span class="s2">"queue </span><span class="si">{</span><span class="n">queue</span><span class="si">}</span><span class="s2">, which could not be asked for it by name; will "</span>
+                <span class="s2">"check again next cycle."</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">slurm_id</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ids</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="c1"># The name lookup may include finished jobs; only a live one counts.</span>
+        <span class="n">statuses</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">poll_many</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_poll_failed</span><span class="p">(</span><span class="n">queue</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">slurm_id</span>
+        <span class="n">live</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ids</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">s</span> <span class="o">:=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">s</span><span class="o">.</span><span class="n">is_terminal</span>
+        <span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">live</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">live_id</span> <span class="o">=</span> <span class="n">slurm_id</span> <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">in</span> <span class="n">live</span> <span class="k">else</span> <span class="n">live</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">live_id</span> <span class="o">==</span> <span class="n">slurm_id</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (slurm_job_id=</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">) was not reported by "</span>
+                <span class="sa">f</span><span class="s2">"queue </span><span class="si">{</span><span class="n">queue</span><span class="si">}</span><span class="s2">, but is still there."</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (slurm_job_id=</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">) is still in queue "</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">queue</span><span class="si">}</span><span class="s2"> as </span><span class="si">{</span><span class="n">live_id</span><span class="si">}</span><span class="s2">; tracking that."</span>
+            <span class="p">)</span>
+            <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+            <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="s2">"UPDATE jobs"</span>
+                <span class="s2">"   SET parameters = json_set(jobs.parameters, '$.slurm_job_id', ?)"</span>
+                <span class="s2">" WHERE id = ?"</span><span class="p">,</span>
+                <span class="p">(</span><span class="n">live_id</span><span class="p">,</span> <span class="n">job_id</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">live_id</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_job_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""The current ``jobs.status`` value for a job, from the datastore."""</span>
@@ -1958,6 +2067,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="n">queue</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backends</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">poll_many</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">queue</span><span class="p">,</span> <span class="n">ids</span> <span class="ow">in</span> <span class="n">by_queue</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
         <span class="p">}</span>
+        <span class="n">failed_queues</span> <span class="o">=</span> <span class="p">{</span><span class="n">queue</span> <span class="k">for</span> <span class="n">queue</span> <span class="ow">in</span> <span class="n">by_queue</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_poll_failed</span><span class="p">(</span><span class="n">queue</span><span class="p">)}</span>
 
         <span class="k">for</span> <span class="p">(</span>
             <span class="n">job_id</span><span class="p">,</span>
@@ -2003,6 +2113,22 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
             <span class="n">statuses</span> <span class="o">=</span> <span class="n">statuses_by_queue</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="p">{})</span>
             <span class="n">status</span> <span class="o">=</span> <span class="n">statuses</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">slurm_id</span><span class="p">))</span> <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">live_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_still_queued</span><span class="p">(</span>
+                    <span class="n">job_id</span><span class="p">,</span>
+                    <span class="n">queue</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">slurm_id</span><span class="p">)</span> <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                    <span class="n">slurm_overrides</span><span class="p">,</span>
+                    <span class="n">queue</span> <span class="ow">in</span> <span class="n">failed_queues</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">live_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="c1"># Tracked as live; the next poll cycle sorts it out.</span>
+                    <span class="n">slurm_id</span> <span class="o">=</span> <span class="n">live_id</span>
+                    <span class="n">status</span> <span class="o">=</span> <span class="n">JobStatus</span><span class="p">(</span>
+                        <span class="n">job_id</span><span class="o">=</span><span class="n">live_id</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="s2">"UNKNOWN"</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="s2">"unknown"</span>
+                    <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">remote_wdir</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">section</span><span class="o">.</span><span class="n">transport</span> <span class="o">==</span> <span class="s2">"ssh"</span><span class="p">:</span>
+                        <span class="n">remote_wdir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remote_wdir</span><span class="p">(</span><span class="n">wdir</span><span class="p">,</span> <span class="n">queue</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">status</span><span class="o">.</span><span class="n">is_terminal</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_jobs</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                     <span class="s2">"mode"</span><span class="p">:</span> <span class="s2">"slurm"</span><span class="p">,</span>

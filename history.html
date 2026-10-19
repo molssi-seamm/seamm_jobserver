@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.10.19 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.10.19.1 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=b2b4b3b2"></script>
+    <script src="_static/documentation_options.js?v=a5793183"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.19" />
+  <meta name="docsearch:version" content="2026.10.19.1" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -506,6 +506,16 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.10.19.1 – Bugfix: jobs still in the queue were submitted a second time</dt><dd><ul class="simple">
+<li><p>A job that a status query of its queue did not report was taken to be lost and
+submitted again, even when the query itself had failed. A short failure on
+TinkerCliffs then resubmitted every job, the running ones too; the two copies ran
+in the same directory and the originals crashed. A job missing from a query is
+now resubmitted only if the query worked and the queue has no queued or running
+job with its name; otherwise it is checked again on the next cycle, or tracked
+under the id it is found with. The same holds when the JobServer restarts.</p></li>
+</ul>
+</dd>
 <dt>2026.10.19 – Resume a job on request</dt><dd><ul class="simple">
 <li><p>A job sent back to ‘submitted’ with a request to resume (the web UI’s ‘Resume
 job’) is started with SEAMM_RESUME, locally or in its queue, so that it continues
