@@ -2259,3 +2259,47 @@ def test_local_start_does_not_inherit_resume(db_path, tmp_path, monkeypatch):
     with mock.patch("psutil.Popen", return_value=FakeProcess(running=True)) as popen:
         js._start_job_local(1, str(tmp_path), ["run_from_jobserver"])
     assert "SEAMM_RESUME" not in popen.call_args.kwargs["env"]
+
+
+# --------------------------------------------------------------------------
+# Resuming a killed or failed job on request (the web UI's resume)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("resume", [True, False])
+def test_submitted_job_resumes_when_asked(db_path, tmp_path, resume):
+    """A job put back to 'submitted' with parameters.resume runs with SEAMM_RESUME,
+    and the request is forgotten once it has started."""
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    extra = {"resume": True} if resume else {}
+    insert_job(db_path, 1, "submitted", str(wdir), extra_params=extra)
+    js = make_jobserver(db_path, wdir)
+
+    js.check_for_new_jobs()
+
+    submitted = js._backends["molssi10"].submitted
+    assert len(submitted) == 1
+    assert ("export SEAMM_RESUME=1\n" in submitted[0]) is resume
+    _, params = get_job(db_path, 1)
+    assert "resume" not in params
+
+
+def test_local_job_resumes_when_asked(db_path, tmp_path, monkeypatch):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "submitted", str(wdir), extra_params={"resume": True})
+    js = make_local_jobserver(db_path)
+    started = []
+    monkeypatch.setattr(
+        js,
+        "_start_job_local",
+        lambda job_id, wdir, cmd, queue=None, resume=False: started.append(resume)
+        or 1234,
+    )
+
+    js.check_for_new_jobs()
+
+    assert started == [True]
+    status, params = get_job(db_path, 1)
+    assert status == "running" and "resume" not in params

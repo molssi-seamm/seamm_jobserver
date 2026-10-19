@@ -1,6 +1,11 @@
 =======
 History
 =======
+2026.10.19 -- Resume a job on request
+    * A job sent back to 'submitted' with a request to resume (the web UI's 'Resume
+      job') is started with SEAMM_RESUME, locally or in its queue, so that it continues
+      from its checkpoint. The request is forgotten once the job has started.
+
 2026.10.11 -- Bugfix: a cancelled job could keep running outside the queue
     * The job script now runs the flowchart with ``exec``, so it replaces the script's
       shell. Before, cancelling a job could kill the shell first; the flowchart was
