@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.10.19.2 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.10.30 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=9281bbe9"></script>
+    <script src="../_static/documentation_options.js?v=fcc0a42c"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.19.2" />
+  <meta name="docsearch:version" content="2026.10.30" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -870,6 +870,13 @@ the JobServer has stopped the job, it sets <code class="docutils literal notrans
 job that is asked to stop before the JobServer ever started it (still
 <code class="docutils literal notranslate"><span class="pre">submitted</span></code>) is simply finalized as <code class="docutils literal notranslate"><span class="pre">killed</span></code> directly.</p></li>
 </ol>
+<p>Before stopping a job either way, the JobServer leaves a kill marker,
+<code class="docutils literal notranslate"><span class="pre">.seamm_killed</span></code>, in the job’s directory (and in its copy on the cluster). A job
+that is stopped and finds it cancels the queue jobs it submitted – task bundles,
+and the evaluators of a parallel loop’s iterations, which cancel their own in
+turn – so nothing keeps running on the cluster. A local job is given up to 90 s
+for that. Without the marker, a stopped job (out of walltime, a lost node) leaves
+its queue jobs running, and the resumed job takes them back.</p>
 <p>Both checks also run as part of startup reattachment, so a kill requested
 right before the JobServer restarts is not lost – it stops the job (or
 finalizes it as <code class="docutils literal notranslate"><span class="pre">killed</span></code>, if it had already ended) instead of resuming

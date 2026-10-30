@@ -401,6 +401,14 @@ for two things every poll cycle, for every job it is actively tracking:
    job that is asked to stop before the JobServer ever started it (still
    ``submitted``) is simply finalized as ``killed`` directly.
 
+Before stopping a job either way, the JobServer leaves a kill marker,
+``.seamm_killed``, in the job's directory (and in its copy on the cluster). A job
+that is stopped and finds it cancels the queue jobs it submitted -- task bundles,
+and the evaluators of a parallel loop's iterations, which cancel their own in
+turn -- so nothing keeps running on the cluster. A local job is given up to 90 s
+for that. Without the marker, a stopped job (out of walltime, a lost node) leaves
+its queue jobs running, and the resumed job takes them back.
+
 Both checks also run as part of startup reattachment, so a kill requested
 right before the JobServer restarts is not lost -- it stops the job (or
 finalizes it as ``killed``, if it had already ended) instead of resuming

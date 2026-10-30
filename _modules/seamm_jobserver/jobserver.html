@@ -6,7 +6,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.19.2 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.10.30 documentation</title>
   
   
   
@@ -47,7 +47,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=9281bbe9"></script>
+    <script src="../../_static/documentation_options.js?v=fcc0a42c"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -61,7 +61,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.19.2" />
+  <meta name="docsearch:version" content="2026.10.30" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -517,6 +517,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="kn">from</span><span class="w"> </span><span class="nn">seamm_scheduler.stage</span><span class="w"> </span><span class="kn">import</span> <span class="n">STAGE_LOCK_FILENAME</span><span class="p">,</span> <span class="n">StageError</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1">#: The marker left in a killed job's directory before it is stopped; the same name</span>
+<span class="c1">#: is seamm_exec.kill.KILL_MARKER</span>
+<span class="n">KILL_MARKER</span> <span class="o">=</span> <span class="s2">".seamm_killed"</span>
+<span class="c1">#: How long a killed local job may take to cancel its queue jobs and iterations</span>
+<span class="n">KILL_WAIT</span> <span class="o">=</span> <span class="mi">90</span>
 <span class="c1"># logger.setLevel(logging.DEBUG)</span>
 
 
@@ -727,6 +733,27 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="s2">"killed"</span><span class="p">,</span> <span class="n">expected_current</span><span class="o">=</span><span class="s2">"kill"</span><span class="p">)</span></div>
 
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_mark_killed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Leave the kill marker in the job's directory (and its copy on the</span>
+<span class="sd">        cluster), so the job, when it gets SIGTERM, cancels the queue jobs it</span>
+<span class="sd">        submitted -- task bundles, parallel-loop iterations -- instead of taking</span>
+<span class="sd">        the signal for an interruption to resume from (seamm_exec.kill; ChemAI</span>
+<span class="sd">        5469 left its Owl jobs running)."""</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"wdir"</span><span class="p">])</span> <span class="o">/</span> <span class="n">KILL_MARKER</span><span class="p">)</span><span class="o">.</span><span class="n">touch</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: could not write the kill marker: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="n">remote_wdir</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"remote_wdir"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">remote_wdir</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backends</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_resolve_queue</span><span class="p">(</span><span class="n">data</span><span class="p">)]</span>
+                <span class="n">backend</span><span class="o">.</span><span class="n">transport</span><span class="o">.</span><span class="n">run</span><span class="p">([</span><span class="s2">"touch"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">remote_wdir</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">KILL_MARKER</span><span class="si">}</span><span class="s2">"</span><span class="p">])</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: could not write the kill marker on the cluster: "</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span>
+                <span class="p">)</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_stop_running_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Actively terminate a tracked job's local process, or cancel its</span>
 <span class="sd">        SLURM job, and stop tracking it here. Does not touch the datastore</span>
@@ -735,13 +762,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="bp">self</span><span class="o">.</span><span class="n">_times</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_mark_killed</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">killed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
         <span class="k">if</span> <span class="n">data</span><span class="p">[</span><span class="s2">"mode"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"local"</span><span class="p">:</span>
             <span class="n">process</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"process"</span><span class="p">]</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">process</span><span class="o">.</span><span class="n">terminate</span><span class="p">()</span>
-                <span class="n">process</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+                <span class="c1"># Time to cancel the queue jobs it submitted (seamm_exec.kill)</span>
+                <span class="n">process</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">KILL_WAIT</span><span class="p">)</span>
             <span class="k">except</span> <span class="n">psutil</span><span class="o">.</span><span class="n">TimeoutExpired</span><span class="p">:</span>
                 <span class="n">process</span><span class="o">.</span><span class="n">kill</span><span class="p">()</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>

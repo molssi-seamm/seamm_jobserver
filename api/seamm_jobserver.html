@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.10.19.2 documentation</title>
+    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.10.30 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=9281bbe9"></script>
+    <script src="../_static/documentation_options.js?v=fcc0a42c"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.10.19.2" />
+  <meta name="docsearch:version" content="2026.10.30" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -696,6 +696,19 @@ since it also needs to record the SLURM job id.</p>
 
 </dd></dl>
 
+<dl class="py data">
+<dt class="sig sig-object py" id="seamm_jobserver.jobserver.KILL_MARKER">
+<span class="sig-prename descclassname"><span class="pre">seamm_jobserver.jobserver.</span></span><span class="sig-name descname"><span class="pre">KILL_MARKER</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'.seamm_killed'</span></span><a class="headerlink" href="#seamm_jobserver.jobserver.KILL_MARKER" title="Link to this definition">#</a></dt>
+<dd><p>The marker left in a killed job’s directory before it is stopped; the same name
+is seamm_exec.kill.KILL_MARKER</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="seamm_jobserver.jobserver.KILL_WAIT">
+<span class="sig-prename descclassname"><span class="pre">seamm_jobserver.jobserver.</span></span><span class="sig-name descname"><span class="pre">KILL_WAIT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">90</span></span><a class="headerlink" href="#seamm_jobserver.jobserver.KILL_WAIT" title="Link to this definition">#</a></dt>
+<dd><p>How long a killed local job may take to cancel its queue jobs and iterations</p>
+</dd></dl>
+
 <dl class="py class">
 <dt class="sig sig-object py" id="seamm_jobserver.jobserver.TkTextHandler">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">seamm_jobserver.jobserver.</span></span><span class="sig-name descname"><span class="pre">TkTextHandler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">widget</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#TkTextHandler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.TkTextHandler" title="Link to this definition">#</a></dt>
@@ -808,6 +821,8 @@ JobServer for the SEAMM environment.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.JobServer.status"><code class="docutils literal notranslate"><span class="pre">JobServer.status()</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.KILL_MARKER"><code class="docutils literal notranslate"><span class="pre">KILL_MARKER</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.KILL_WAIT"><code class="docutils literal notranslate"><span class="pre">KILL_WAIT</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.TkTextHandler"><code class="docutils literal notranslate"><span class="pre">TkTextHandler</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.TkTextHandler.emit"><code class="docutils literal notranslate"><span class="pre">TkTextHandler.emit()</span></code></a></li>
 </ul>
