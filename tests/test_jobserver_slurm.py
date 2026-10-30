@@ -1308,6 +1308,8 @@ def test_check_for_stopped_jobs_kills_tracked_slurm_job_on_kill_status(
     assert js._backends["molssi10"].cancelled == ["42"]
     assert 1 not in js._jobs
     assert get_job(db_path, 1)[0] == "killed"
+    # The kill marker, so the job cancels the queue jobs it submitted
+    assert (wdir / ".seamm_killed").exists()
 
 
 def test_check_for_stopped_jobs_kill_status_not_yet_started(db_path, tmp_path):

@@ -1,6 +1,13 @@
 =======
 History
 =======
+2026.10.30 -- Bugfix: killing a job also stops the queue jobs it submitted
+    * Killing or deleting a job now leaves a kill marker in its directory (and its copy
+      on the cluster) before stopping it, and gives a local job up to 90 s to stop.
+      With seamm-exec 2026.10.30.1 the job then cancels the queue jobs it submitted --
+      task bundles and the evaluators of a parallel loop's iterations -- which were
+      left running before.
+
 2026.10.19.2 -- A flowchart that cannot be run here fails at once
     * Before starting a job that runs on its own installation, the JobServer checks
       that the installation's plug-ins can read the flowchart. A flowchart made with a

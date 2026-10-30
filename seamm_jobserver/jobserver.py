@@ -29,6 +29,12 @@ from seamm_scheduler.script import build_script
 from seamm_scheduler.stage import STAGE_LOCK_FILENAME, StageError
 
 logger = logging.getLogger(__name__)
+
+#: The marker left in a killed job's directory before it is stopped; the same name
+#: is seamm_exec.kill.KILL_MARKER
+KILL_MARKER = ".seamm_killed"
+#: How long a killed local job may take to cancel its queue jobs and iterations
+KILL_WAIT = 90
 # logger.setLevel(logging.DEBUG)
 
 
@@ -222,6 +228,27 @@ class JobServer(collections.abc.MutableMapping):
                 self._stop_running_job(job_id)
             self._finalize_job_status(job_id, "killed", expected_current="kill")
 
+    def _mark_killed(self, job_id, data):
+        """Leave the kill marker in the job's directory (and its copy on the
+        cluster), so the job, when it gets SIGTERM, cancels the queue jobs it
+        submitted -- task bundles, parallel-loop iterations -- instead of taking
+        the signal for an interruption to resume from (seamm_exec.kill; ChemAI
+        5469 left its Owl jobs running)."""
+        try:
+            (Path(data["wdir"]) / KILL_MARKER).touch()
+        except Exception as e:
+            self.logger.warning(f"Job {job_id}: could not write the kill marker: {e}")
+        remote_wdir = data.get("remote_wdir")
+        if remote_wdir:
+            try:
+                backend = self._backends[self._resolve_queue(data)]
+                backend.transport.run(["touch", f"{remote_wdir}/{KILL_MARKER}"])
+            except Exception as e:
+                self.logger.warning(
+                    f"Job {job_id}: could not write the kill marker on the cluster: "
+                    f"{e}"
+                )
+
     def _stop_running_job(self, job_id):
         """Actively terminate a tracked job's local process, or cancel its
         SLURM job, and stop tracking it here. Does not touch the datastore
@@ -230,13 +257,15 @@ class JobServer(collections.abc.MutableMapping):
         self._times.pop(job_id, None)
         if data is None:
             return
+        self._mark_killed(job_id, data)
 
         self.killed_jobs += 1
         if data["mode"] == "local":
             process = data["process"]
             try:
                 process.terminate()
-                process.wait(timeout=5)
+                # Time to cancel the queue jobs it submitted (seamm_exec.kill)
+                process.wait(timeout=KILL_WAIT)
             except psutil.TimeoutExpired:
                 process.kill()
             except Exception as e:
