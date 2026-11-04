@@ -12,6 +12,8 @@ isolation; these tests cover how JobServer *uses* it.
 import json
 from pathlib import Path
 import sqlite3
+import threading
+import time
 from unittest import mock
 
 import psutil
@@ -2562,3 +2564,97 @@ def test_remote_queue_flowchart_is_not_checked(db_path, tmp_path, monkeypatch):
     assert calls == []
     assert len(js._backends["molssi10"].submitted) == 1
     assert not (wdir / "job.out").exists()
+
+
+# ---- resubmitting large remote jobs, and copying back without blocking -----
+# ChemAI 5398 (2026-10-31): its evaluator timed out; the resubmit staged the 28 GB
+# local copy in again, inside the poll loop, and the JobServer polled nothing else
+# for 3.5 h.
+
+
+class ExistingRemoteStager(FakeStager):
+    """A stager whose remote directories exist (or not), and whose copy back can be
+    held until released."""
+
+    def __init__(self, exists=True):
+        super().__init__()
+        self.exists = exists
+        self.release = threading.Event()
+        self.release.set()
+
+    def remote_exists(self, remote_wdir):
+        return self.exists
+
+    def stage_out(self, remote_wdir, local_wdir):
+        self.release.wait(10)
+        super().stage_out(remote_wdir, local_wdir)
+
+
+def _timed_out_ssh_job(db_path, tmp_path, stager):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+    js = make_ssh_jobserver(db_path, remote_root="/remote/scratch")
+    js._stagers["molssi10"] = stager
+    js._jobs[1] = {
+        "mode": "slurm",
+        "slurm_job_id": "42",
+        "wdir": str(wdir),
+        "remote_wdir": "/remote/scratch/Job_1",
+        "cmdline": ["run_from_jobserver"],
+        "resubmit_count": 0,
+    }
+    js._times[1] = {}
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="TIMEOUT", category="failed"
+    )
+    return js, wdir
+
+
+def test_resubmit_resumes_in_the_existing_remote_dir_without_staging_in(
+    db_path, tmp_path
+):
+    js, wdir = _timed_out_ssh_job(db_path, tmp_path, ExistingRemoteStager(True))
+    js.check_for_finished_jobs()
+
+    stager = js._stagers["molssi10"]
+    assert stager.staged_in == []  # nothing pushed back over the remote files
+    script = js._backends["molssi10"].submitted[0]
+    assert "#SBATCH --chdir=/remote/scratch/Job_1" in script
+    assert "=1" in script and "export" in script  # resumes from the checkpoint
+    assert get_job(db_path, 1)[1]["resubmit_count"] == 1
+
+
+def test_resubmit_stages_in_when_the_remote_dir_is_gone(db_path, tmp_path):
+    js, wdir = _timed_out_ssh_job(db_path, tmp_path, ExistingRemoteStager(False))
+    js.check_for_finished_jobs()
+
+    assert js._stagers["molssi10"].staged_in == [(str(wdir), "/remote/scratch/Job_1")]
+
+
+def test_a_long_copy_back_does_not_block_polling(db_path, tmp_path):
+    stager = ExistingRemoteStager(True)
+    stager.release.clear()  # the copy back takes 'hours'
+    js, wdir = _timed_out_ssh_job(db_path, tmp_path, stager)
+    js.STAGE_WAIT = 0.05
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="COMPLETED", category="completed", exit_code="0:0"
+    )
+    (wdir / "job_data.json").write_text('!MolSSI job_data 1.0\n{"state": "finished"}\n')
+
+    started = time.time()
+    js.check_for_finished_jobs()
+    assert time.time() - started < 2.0  # the poll did not wait for the copy
+    assert get_job(db_path, 1)[0] == "running" and 1 in js._jobs
+    js.check_for_finished_jobs()  # still copying: nothing changes, no new copy
+    assert len(js._staging) == 1
+
+    stager.release.set()
+    for _ in range(50):
+        js.check_for_finished_jobs()
+        if 1 not in js._jobs:
+            break
+        time.sleep(0.05)
+    assert get_job(db_path, 1)[0] == "finished"
+    assert stager.staged_out == [("/remote/scratch/Job_1", str(wdir))]
+    assert js._staging == {}

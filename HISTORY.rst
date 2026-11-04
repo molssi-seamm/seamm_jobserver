@@ -1,6 +1,16 @@
 =======
 History
 =======
+2026.11.4 -- Bugfix: a large remote job could stop the JobServer for hours
+    * Resubmitting or resuming a job on a ``transport = ssh`` queue staged the local
+      copy of its directory in again, inside the poll loop: for a 28 GB job that took
+      3.5 h, during which no other job was polled (finished jobs stayed "running"),
+      and it could overwrite newer files on the cluster with older ones. A resubmitted
+      or resumed job now continues in its remote directory without staging it in when
+      that still exists (needs seamm-scheduler 2026.11.4).
+    * Copying a finished job's files back runs in the background: a large copy no
+      longer stops the JobServer polling the other jobs.
+
 2026.10.30 -- Bugfix: killing a job also stops the queue jobs it submitted
     * Killing or deleting a job now leaves a kill marker in its directory (and its copy
       on the cluster) before stopping it, and gives a local job up to 90 s to stop.
