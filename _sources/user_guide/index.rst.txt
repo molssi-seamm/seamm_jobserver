@@ -212,6 +212,14 @@ the JobServer:
    new, a low ``max_resubmits`` limits the cost of reruns from the top.
 3. Beyond the cap, gives up and marks the job ``error``.
 
+For a queue with ``transport = ssh``, the job ran in its remote directory, which has
+its latest files, so a resubmitted or resumed job continues there: the local copy is
+not staged in again if the remote directory still exists (seamm-scheduler 2026.11.4 or
+later). Staging a large job in again took hours and could overwrite newer files with
+older ones. Copying a finished job's files back runs in the background: a poll waits a
+couple of seconds for it, and a longer copy carries on while the JobServer polls the
+other jobs, so one large job cannot hold up the rest.
+
 The same holds for a PBS queue, which loses jobs the same ways SLURM does (a
 failed node, a ``qdel`` by an administrator, the walltime), and for the TaskServer
 (``scheduler = seamm``), whose job is lost when its runner stops (the machine
