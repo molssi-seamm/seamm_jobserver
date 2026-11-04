@@ -3,6 +3,7 @@
 """The JobServer for the SEAMM environment."""
 
 import collections.abc
+import concurrent.futures
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -16,6 +17,7 @@ import socket
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import traceback
 
@@ -64,6 +66,10 @@ def humanize(memory, suffix="B", kilo=1024):
         memory /= kilo
 
 
+class _StageLockBusy(Exception):
+    """Another process holds a job's stage lock (e.g. a dashboard pulling its files)."""
+
+
 class TkTextHandler(logging.StreamHandler):
     def __init__(self, widget):
         super().__init__()
@@ -110,6 +116,9 @@ class JobServer(collections.abc.MutableMapping):
         self._db_path = None
         self._tasks = set()
         self._jobs = {}
+        # Results being copied back from remote hosts, by job id: a large copy
+        # runs in the background so that it cannot stop the poll loop
+        self._staging = {}
         # Whether each flowchart (by its SHA-256) can be read with this
         # installation's plug-ins: None if so, else why not (see _check_flowchart)
         self._flowchart_checks = {}
@@ -677,6 +686,78 @@ class JobServer(collections.abc.MutableMapping):
         )
         self.db.commit()
 
+    #: Seconds a poll cycle waits for a copy back from a remote host; a longer copy
+    #: carries on in the background and is looked at again in later cycles
+    STAGE_WAIT = 2.0
+
+    def _stage_out_in_background(self, job_id, queue, remote_wdir, wdir):
+        """Copy a job's files back from the remote host without blocking polling.
+
+        The copy runs in a worker thread. It is waited for briefly, so a small job
+        is finalized in the same poll cycle; a large one carries on while the loop
+        polls the other jobs, and is looked at again in later cycles.
+
+        Returns
+        -------
+        bool
+            True once the files are here; False while the copy runs or after a
+            failure (logged; the copy is tried again in the next cycle).
+        """
+        future = self._staging.get(job_id)
+        if future is None:
+            future = concurrent.futures.Future()
+
+            def copy_back():
+                try:
+                    self._locked_stage_out(queue, remote_wdir, wdir)
+                except BaseException as e:
+                    future.set_exception(e)
+                else:
+                    future.set_result(None)
+
+            # A daemon thread, so that a copy still running never holds up exiting
+            threading.Thread(
+                target=copy_back, name=f"stage-{job_id}", daemon=True
+            ).start()
+            self._staging[job_id] = future
+        try:
+            future.result(timeout=self.STAGE_WAIT)
+        except concurrent.futures.TimeoutError:
+            if not getattr(future, "reported", False):
+                future.reported = True
+                self.logger.info(
+                    f"Job {job_id}: copying its files back from {remote_wdir} in "
+                    "the background; polling carries on."
+                )
+            return False
+        except _StageLockBusy:
+            del self._staging[job_id]
+            self.logger.warning(
+                f"Job {job_id}: could not acquire the stage lock for "
+                f"{wdir} (a concurrent sync in progress?), will retry "
+                "next poll cycle."
+            )
+            return False
+        except StageError as e:
+            del self._staging[job_id]
+            self.logger.warning(
+                f"Job {job_id}: stage_out from {remote_wdir} failed, "
+                f"will retry next poll cycle: {e}"
+            )
+            return False
+        del self._staging[job_id]
+        return True
+
+    def _locked_stage_out(self, queue, remote_wdir, wdir):
+        """Copy a job's files back under its stage lock (in a worker thread)."""
+        lock = fasteners.InterProcessLock(str(Path(wdir) / STAGE_LOCK_FILENAME))
+        if not lock.acquire(blocking=True, timeout=5):
+            raise _StageLockBusy()
+        try:
+            self._stagers[queue].stage_out(remote_wdir, wdir)
+        finally:
+            lock.release()
+
     def _finalize_or_resubmit_slurm_job(self, job_id, data, resubmit_count):
         """Finalize a SLURM job's datastore status now that SLURM reports it
         terminal (or has no record of it at all), or resubmit it if there's
@@ -725,24 +806,8 @@ class JobServer(collections.abc.MutableMapping):
         section = self._sections[queue]
 
         if remote_wdir is not None:
-            lock = fasteners.InterProcessLock(str(Path(wdir) / STAGE_LOCK_FILENAME))
-            if not lock.acquire(blocking=True, timeout=5):
-                self.logger.warning(
-                    f"Job {job_id}: could not acquire the stage lock for "
-                    f"{wdir} (a concurrent sync in progress?), will retry "
-                    "next poll cycle."
-                )
+            if not self._stage_out_in_background(job_id, queue, remote_wdir, wdir):
                 return True
-            try:
-                self._stagers[queue].stage_out(remote_wdir, wdir)
-            except StageError as e:
-                self.logger.warning(
-                    f"Job {job_id}: stage_out from {remote_wdir} failed, "
-                    f"will retry next poll cycle: {e}"
-                )
-                return True
-            finally:
-                lock.release()
 
         state = self._job_conclusion(wdir)
         if state is not None:
@@ -2051,7 +2116,24 @@ class JobServer(collections.abc.MutableMapping):
         effective_wdir = wdir
         if section.transport == "ssh":
             remote_wdir = self._remote_wdir(wdir, queue)
-            effective_wdir = self._stagers[queue].stage_in(wdir, remote_wdir)
+            stager = self._stagers[queue]
+            # A resubmitted or resumed job ran in its remote directory, which has
+            # its latest files: staging the local copy in again would take long
+            # for a large job (28 GB, 3.5 h for ChemAI 5398, which blocked the
+            # JobServer) and could overwrite newer files with older ones.
+            exists = getattr(stager, "remote_exists", None)
+            if (
+                (resubmit_count > 0 or resume)
+                and exists is not None
+                and (exists(remote_wdir))
+            ):
+                self.logger.info(
+                    f"Job {job_id}: {remote_wdir} is already there; resuming in it "
+                    "without staging the local copy in again."
+                )
+                effective_wdir = remote_wdir
+            else:
+                effective_wdir = stager.stage_in(wdir, remote_wdir)
 
         cmd = self._build_cmd(job_id, effective_wdir, cmdline, queue)
         quoted_cmd = " ".join(shlex.quote(c) for c in cmd)
