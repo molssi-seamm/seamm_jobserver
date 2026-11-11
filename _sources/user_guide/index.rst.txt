@@ -422,6 +422,20 @@ right before the JobServer restarts is not lost -- it stops the job (or
 finalizes it as ``killed``, if it had already ended) instead of resuming
 tracking or, worse, resubmitting it as if it had merely gone missing.
 
+When a job ends: plug-in hooks
+==============================
+
+When a job has ended -- finished, failed or killed -- and its files are back on the
+JobServer's host, the JobServer calls the hooks that installed packages register in
+the entry-point group ``org.molssi.seamm.jobserver.job_finished``, each as
+``hook(job_id=..., wdir=..., state=..., logger=...)``. They run once per job, in a
+background thread, so they never delay polling, and an error in one is logged
+without changing the job or its status. The JobServer's log lists the hooks found
+when the first job ends.
+
+seamm-thermochemistry uses this to harvest into the fragment store the species of
+jobs that ran where the store could not be written, e.g. on a cluster.
+
 Index
 =====
 

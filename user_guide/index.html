@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.11.4 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.11.11 documentation</title>
   
   
   
@@ -31,7 +31,7 @@
 
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=6a604523" />
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=c224919a" />
   
   <!-- So that users can add custom icons -->
@@ -48,12 +48,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=4c137905"></script>
+    <script src="../_static/documentation_options.js?v=83e1bca7"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
-    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script data-sd-tabs-storage-prefix="sphinx-design-tab-id-" src="../_static/design-tabs.js?v=fcb327ea"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
 
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.11.4" />
+  <meta name="docsearch:version" content="2026.11.11" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -889,6 +889,18 @@ right before the JobServer restarts is not lost – it stops the job (or
 finalizes it as <code class="docutils literal notranslate"><span class="pre">killed</span></code>, if it had already ended) instead of resuming
 tracking or, worse, resubmitting it as if it had merely gone missing.</p>
 </section>
+<section id="when-a-job-ends-plug-in-hooks">
+<h2>When a job ends: plug-in hooks<a class="headerlink" href="#when-a-job-ends-plug-in-hooks" title="Link to this heading">#</a></h2>
+<p>When a job has ended – finished, failed or killed – and its files are back on the
+JobServer’s host, the JobServer calls the hooks that installed packages register in
+the entry-point group <code class="docutils literal notranslate"><span class="pre">org.molssi.seamm.jobserver.job_finished</span></code>, each as
+<code class="docutils literal notranslate"><span class="pre">hook(job_id=...,</span> <span class="pre">wdir=...,</span> <span class="pre">state=...,</span> <span class="pre">logger=...)</span></code>. They run once per job, in a
+background thread, so they never delay polling, and an error in one is logged
+without changing the job or its status. The JobServer’s log lists the hooks found
+when the first job ends.</p>
+<p>seamm-thermochemistry uses this to harvest into the fragment store the species of
+jobs that ran where the store could not be written, e.g. on a cluster.</p>
+</section>
 <section id="index">
 <h2>Index<a class="headerlink" href="#index" title="Link to this heading">#</a></h2>
 <ul class="simple">
@@ -956,6 +968,7 @@ tracking or, worse, resubmitting it as if it had merely gone missing.</p>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#stopping-a-job">Stopping a job</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#when-a-job-ends-plug-in-hooks">When a job ends: plug-in hooks</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#index">Index</a></li>
 </ul>
   </nav></div>
