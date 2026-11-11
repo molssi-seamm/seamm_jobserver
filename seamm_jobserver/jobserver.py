@@ -668,7 +668,84 @@ class JobServer(collections.abc.MutableMapping):
             "UPDATE jobs SET status = ?, finished = ?" " WHERE id = ? AND status = ?",
             (status, current_time, job_id, expected_current),
         )
+        changed = cursor.rowcount == 1
         self.db.commit()
+        if changed:
+            # Only when this call ended the job, so a hook runs once per job
+            self._run_finished_hooks(job_id, status)
+
+    #: The entry-point group of plug-ins' hooks run when a job has ended
+    JOB_FINISHED_HOOKS = "org.molssi.seamm.jobserver.job_finished"
+
+    def _finished_hooks(self):
+        """[(name, callable)] of the installed ``job_finished`` hooks, loaded
+        once. A hook that cannot be loaded is logged and left out."""
+        hooks = getattr(self, "_job_finished_hooks", None)
+        if hooks is not None:
+            return hooks
+        from importlib.metadata import entry_points
+
+        hooks = []
+        try:
+            found = entry_points(group=self.JOB_FINISHED_HOOKS)
+        except Exception as e:  # pragma: no cover
+            self.logger.warning(f"Could not list the job_finished hooks: {e}")
+            found = []
+        for entry in found:
+            try:
+                hooks.append((entry.name, entry.load()))
+            except Exception as e:
+                self.logger.warning(
+                    f"The job_finished hook '{entry.name}' could not be loaded: {e}"
+                )
+        if hooks:
+            self.logger.info(
+                "job_finished hooks: " + ", ".join(name for name, _ in hooks)
+            )
+        self._job_finished_hooks = hooks
+        return hooks
+
+    def _run_finished_hooks(self, job_id, status):
+        """Run the plug-ins' ``job_finished`` hooks for a job that has just
+        ended, in a background thread, after its files are back on this host.
+
+        Each hook is called as ``hook(job_id=, wdir=, state=, logger=)``. A hook
+        never changes the job or its status, never delays polling, and its
+        exceptions are logged. (The Thermochemistry step's fragment store uses
+        this to harvest jobs that ran on a cluster.)
+        """
+        try:
+            hooks = self._finished_hooks()
+            if not hooks:
+                return
+            wdir = (self._jobs.get(job_id) or {}).get("wdir")
+            if wdir is None:
+                row = (
+                    self.db.cursor()
+                    .execute("SELECT path FROM jobs WHERE id = ?", (job_id,))
+                    .fetchone()
+                )
+                wdir = row[0] if row else None
+            if not wdir:
+                return
+            executor = getattr(self, "_hook_executor", None)
+            if executor is None:
+                executor = concurrent.futures.ThreadPoolExecutor(
+                    max_workers=1, thread_name_prefix="job-finished"
+                )
+                self._hook_executor = executor
+            for name, hook in hooks:
+                executor.submit(self._call_hook, name, hook, job_id, wdir, status)
+        except Exception as e:  # never let a hook disturb the JobServer
+            self.logger.warning(f"Job {job_id}: the job_finished hooks failed: {e}")
+
+    def _call_hook(self, name, hook, job_id, wdir, status):
+        try:
+            hook(job_id=job_id, wdir=Path(wdir), state=status, logger=self.logger)
+        except Exception as e:
+            self.logger.warning(
+                f"Job {job_id}: the job_finished hook '{name}' failed: {e}"
+            )
 
     def _mark_startup_error(self, job_id, message):
         """Fail a job at startup time -- an unroutable/unauthorized request

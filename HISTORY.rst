@@ -1,6 +1,13 @@
 =======
 History
 =======
+2026.11.11 -- Hooks for plug-ins when a job ends
+    * When a job ends and its files are back on this host, the JobServer calls the
+      hooks installed packages register under
+      ``org.molssi.seamm.jobserver.job_finished``, once per job, in the background;
+      an error in a hook is logged and changes nothing else. seamm-thermochemistry
+      uses it to harvest jobs that ran on a cluster into its fragment store.
+
 2026.11.4 -- Bugfix: a large remote job could stop the JobServer for hours
     * Resubmitting or resuming a job on a ``transport = ssh`` queue staged the local
       copy of its directory in again, inside the poll loop: for a 28 GB job that took
