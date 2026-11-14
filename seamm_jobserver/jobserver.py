@@ -88,6 +88,43 @@ NON_TERMINAL_STATES = ("submitted", "started", "running", "waiting", "pending")
 RESUME_ENVIRONMENT = "SEAMM_RESUME"
 
 
+def stopped_by_limit(status):
+    """Why a job that ended in the queue would only stop the same way again if
+    resubmitted, or None.
+
+    A job that reached its time limit (SLURM TIMEOUT or DEADLINE, PBS's
+    walltime kill) or ran out of memory (OUT_OF_MEMORY) asked for too little.
+    Resubmitting it with the same request spends as much again, so a time
+    limit could not cap a job's cost: one job with a 50-minute limit ran four
+    times, about four times what was meant, before it was given up.
+
+    Parameters
+    ----------
+    status : seamm_scheduler.scheduler.JobStatus or None
+        The job's last status from the queue; None if the queue no longer
+        knows the job.
+
+    Returns
+    -------
+    str or None
+        A short reason, such as "it reached its time limit", or None if the
+        job was not stopped by a limit (it may be worth resubmitting).
+    """
+    if status is None or not status.is_terminal:
+        return None
+    state = (status.state or "").strip().upper()
+    timed_out = getattr(status, "timed_out", None)
+    if timed_out is None:  # an older seamm_scheduler
+        timed_out = state == "TIMEOUT"
+    if timed_out:
+        return "it reached its time limit"
+    if state == "DEADLINE":
+        return "it reached its deadline"
+    if state == "OUT_OF_MEMORY":
+        return "it ran out of memory"
+    return None
+
+
 class JobServer(collections.abc.MutableMapping):
     def __init__(self, logger=logger):
         """Initialize the instance
@@ -473,7 +510,7 @@ class JobServer(collections.abc.MutableMapping):
 
             if self._get_job_status(job_id) == "running":
                 resubmitted = self._finalize_or_resubmit_slurm_job(
-                    job_id, data, data.get("resubmit_count", 0)
+                    job_id, data, data.get("resubmit_count", 0), status=status
                 )
                 if resubmitted:
                     # _start_job_slurm already replaced self._jobs[job_id]/
@@ -835,7 +872,9 @@ class JobServer(collections.abc.MutableMapping):
         finally:
             lock.release()
 
-    def _finalize_or_resubmit_slurm_job(self, job_id, data, resubmit_count):
+    def _finalize_or_resubmit_slurm_job(
+        self, job_id, data, resubmit_count, status=None
+    ):
         """Finalize a SLURM job's datastore status now that SLURM reports it
         terminal (or has no record of it at all), or resubmit it if there's
         nothing yet to finalize from.
@@ -866,6 +905,28 @@ class JobServer(collections.abc.MutableMapping):
         to resubmitting, up to the queue's ``max_resubmits``, since
         flowcharts checkpoint completed steps and safely resume; beyond the
         cap, gives up and marks the job ``error``.
+
+        Except for a job the queue stopped at a limit (see
+        :func:`stopped_by_limit`): it reached its time limit or ran out of
+        memory, and a resubmission with the same request would only stop
+        the same way, so it is marked ``error`` straight away and the reason
+        logged and written to ``job_data.json``. It can be resumed, with a
+        larger request, from its last completed step. A queue that wants
+        jobs to carry on across time limits sets ``timeout_resubmits``: a
+        job that reached its time limit is then resubmitted to resume, that
+        many times (at most ``max_resubmits``).
+
+        Parameters
+        ----------
+        job_id : int
+            The SEAMM job id.
+        data : dict
+            The job's tracking data.
+        resubmit_count : int
+            How many times the job has been resubmitted already.
+        status : seamm_scheduler.scheduler.JobStatus, optional
+            The job's last status from the queue; None if the queue no
+            longer knows the job (or it was never submitted).
 
         Returns
         -------
@@ -902,11 +963,57 @@ class JobServer(collections.abc.MutableMapping):
                 self.failed_jobs += 1
             return False
 
+        slurm_id = data.get("slurm_job_id")
+        limit = stopped_by_limit(status)
+        timeout_resubmits = min(
+            getattr(section, "timeout_resubmits", 0) or 0, section.max_resubmits
+        )
+        if (
+            limit is not None
+            and "time limit" in limit
+            and resubmit_count < timeout_resubmits
+        ):
+            self.logger.warning(
+                f"Job {job_id} (slurm_job_id={slurm_id}) ended in state "
+                f"{status.state}: {limit}. Resubmitting it to resume from its "
+                f"checkpoint (attempt {resubmit_count + 1}/{timeout_resubmits}, "
+                "timeout_resubmits)."
+            )
+            self._start_job_slurm(
+                job_id,
+                wdir,
+                data["cmdline"],
+                queue,
+                resubmit_count=resubmit_count + 1,
+                slurm_overrides=data.get("slurm_overrides"),
+            )
+            return True
+        if limit is not None:
+            self.logger.warning(
+                f"Job {job_id} (slurm_job_id={slurm_id}) ended in state "
+                f"{status.state}: {limit}. It is not resubmitted, since it would "
+                "stop the same way; it can be resumed with a larger request "
+                "(or set timeout_resubmits for the queue to resume after a time "
+                "limit)."
+            )
+            extra = {"queue": queue, "stopped": f"{status.state}: {limit}"}
+            if slurm_id is not None:
+                extra["slurm_job_id"] = slurm_id
+            self._annotate_job_data(wdir, extra)
+            self._finalize_job_status(job_id, "error")
+            self.failed_jobs += 1
+            return False
+
+        if status is None:
+            why = "SLURM lost track of it"
+        else:
+            why = f"it ended in state {status.state}"
+
         max_resubmits = section.max_resubmits
         if resubmit_count >= max_resubmits:
             self.logger.warning(
                 f"Job {job_id}: giving up after {resubmit_count} resubmit(s) "
-                "(SLURM lost track of it and no job_data.json was written)."
+                f"({why} and no job_data.json was written)."
             )
             self._finalize_job_status(job_id, "error")
             self.failed_jobs += 1
@@ -914,7 +1021,7 @@ class JobServer(collections.abc.MutableMapping):
 
         self.logger.warning(
             f"Job {job_id}: resubmitting (attempt {resubmit_count + 1}/"
-            f"{max_resubmits})."
+            f"{max_resubmits}); {why} and no job_data.json was written."
         )
         self._start_job_slurm(
             job_id,
@@ -1815,6 +1922,7 @@ class JobServer(collections.abc.MutableMapping):
                     "slurm_overrides": slurm_overrides,
                 },
                 resubmit_count,
+                status=status,
             )
 
     def start_job(

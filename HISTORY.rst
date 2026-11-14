@@ -1,6 +1,19 @@
 =======
 History
 =======
+2026.11.14 -- Bugfix: jobs that reached their time limit were resubmitted
+    * A job that reached its time limit (SLURM ``TIMEOUT``) or ran out of memory was
+      resubmitted, up to ``max_resubmits`` times, and logged as "SLURM lost track of
+      it". Each rerun spent as much again, so a time limit could not cap a job's
+      cost. Such a job is now marked ``error`` with the reason in the log and in
+      ``job_data.json`` (``stopped``); it can be resumed by hand with more time or
+      memory.
+    * A queue whose time limit is deliberately shorter than its jobs can set
+      ``timeout_resubmits`` (needs seamm-scheduler 2026.11.14): a job that reached
+      its time limit is then resubmitted to resume, that many times.
+    * When a job is resubmitted, the log now says why (the state it ended in, or that
+      the queue no longer knows it).
+
 2026.11.11 -- Hooks for plug-ins when a job ends
     * When a job ends and its files are back on this host, the JobServer calls the
       hooks installed packages register under

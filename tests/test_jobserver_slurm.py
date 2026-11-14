@@ -19,7 +19,7 @@ from unittest import mock
 import psutil
 import pytest
 
-from seamm_jobserver.jobserver import JobServer
+from seamm_jobserver.jobserver import JobServer, stopped_by_limit
 from seamm_scheduler.config import FieldLimits, SlurmSection
 from seamm_scheduler.stage import StageError
 from seamm_scheduler.scheduler import JobStatus
@@ -848,7 +848,7 @@ def test_reattach_terminal_job_resubmits(db_path, tmp_path):
 
     js = make_jobserver(db_path, wdir)
     js._backends["molssi10"].statuses["42"] = JobStatus(
-        job_id="42", state="TIMEOUT", category="failed"
+        job_id="42", state="NODE_FAIL", category="failed"
     )
 
     js._reattach_slurm_jobs()
@@ -2129,13 +2129,15 @@ def test_job_conclusion(tmp_path, state, conclusion):
 
 
 def test_walltime_killed_job_is_resubmitted_to_resume(db_path, tmp_path):
-    """A job killed part way leaves state 'started': resubmit, and resume."""
+    """A job killed part way leaves state 'started': resubmit, and resume, when
+    the queue asks for it with timeout_resubmits."""
     wdir = tmp_path / "Job_1"
     wdir.mkdir()
     (wdir / "job_data.json").write_text(STARTED)
     insert_job(db_path, 1, "running", str(wdir))
 
     js = make_jobserver(db_path, wdir)
+    js._sections["molssi10"].timeout_resubmits = 1
     js._jobs[1] = {
         "mode": "slurm",
         "slurm_job_id": "42",
@@ -2595,6 +2597,7 @@ def _timed_out_ssh_job(db_path, tmp_path, stager):
     wdir.mkdir()
     insert_job(db_path, 1, "running", str(wdir))
     js = make_ssh_jobserver(db_path, remote_root="/remote/scratch")
+    js._sections["molssi10"].timeout_resubmits = 1  # resume after a time limit
     js._stagers["molssi10"] = stager
     js._jobs[1] = {
         "mode": "slurm",
@@ -2658,3 +2661,189 @@ def test_a_long_copy_back_does_not_block_polling(db_path, tmp_path):
     assert get_job(db_path, 1)[0] == "finished"
     assert stager.staged_out == [("/remote/scratch/Job_1", str(wdir))]
     assert js._staging == {}
+
+
+# ---- jobs stopped at a limit are not resubmitted -------------------------
+
+
+def _track(js, wdir, resubmit_count=0):
+    js._jobs[1] = {
+        "mode": "slurm",
+        "slurm_job_id": "42",
+        "wdir": str(wdir),
+        "cmdline": ["run_from_jobserver", "1", str(wdir)],
+        "resubmit_count": resubmit_count,
+    }
+    js._times[1] = {}
+
+
+@pytest.mark.parametrize(
+    "state, exit_code, reason",
+    [
+        ("TIMEOUT", None, "time limit"),
+        ("DEADLINE", None, "deadline"),
+        ("OUT_OF_MEMORY", None, "out of memory"),
+        ("F", "-29", "time limit"),  # PBS's walltime kill
+    ],
+)
+def test_job_stopped_at_a_limit_is_not_resubmitted(
+    db_path, tmp_path, state, exit_code, reason
+):
+    """A job that reached its time limit or ran out of memory would stop the
+    same way again: it is marked error, not resubmitted (one job with a
+    50-minute limit ran four times before)."""
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+    # Written when the flowchart started; it never got to write an end state
+    (wdir / "job_data.json").write_text('!MolSSI job_data 1.0\n{"state": "running"}\n')
+
+    js = make_jobserver(db_path, wdir)
+    _track(js, wdir)
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state=state, category="failed", exit_code=exit_code
+    )
+
+    js.check_for_finished_jobs()
+
+    assert js._backends["molssi10"].submitted == []
+    assert get_job(db_path, 1)[0] == "error"
+    assert 1 not in js._jobs
+    assert js.failed_jobs == 1
+    data = json.loads((wdir / "job_data.json").read_text().split("\n", 1)[1])
+    assert data["stopped"].startswith(f"{state}: ")
+    assert reason in data["stopped"]
+    assert data["slurm_job_id"] == "42"
+
+
+def test_reattached_job_stopped_at_its_time_limit_is_not_resubmitted(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(
+        db_path,
+        1,
+        "running",
+        str(wdir),
+        extra_params={"slurm_job_id": "42", "resubmit_count": 0},
+    )
+
+    js = make_jobserver(db_path, wdir)
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="TIMEOUT", category="failed"
+    )
+
+    js._reattach_slurm_jobs()
+
+    assert js._backends["molssi10"].submitted == []
+    assert get_job(db_path, 1)[0] == "error"
+
+
+def test_resubmission_says_why(db_path, tmp_path):
+    """The log names the state the job ended in, not "lost track"."""
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+
+    js = make_jobserver(db_path, wdir)
+    js.logger = mock.Mock()
+    _track(js, wdir)
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="NODE_FAIL", category="failed"
+    )
+
+    js.check_for_finished_jobs()
+
+    assert len(js._backends["molssi10"].submitted) == 1
+    warnings = " ".join(str(c.args[0]) for c in js.logger.warning.call_args_list)
+    assert "ended in state NODE_FAIL" in warnings
+    assert "lost track" not in warnings
+
+
+def test_give_up_message_for_a_job_slurm_lost(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+
+    js = make_jobserver(db_path, wdir, max_resubmits=1)
+    js.logger = mock.Mock()
+    js._still_queued = lambda *args: None
+    _track(js, wdir, resubmit_count=1)
+
+    js.check_for_finished_jobs()
+
+    assert js._backends["molssi10"].submitted == []
+    assert get_job(db_path, 1)[0] == "error"
+    warnings = " ".join(str(c.args[0]) for c in js.logger.warning.call_args_list)
+    assert "SLURM lost track of it" in warnings
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        None,
+        JobStatus(job_id="1", state="NODE_FAIL", category="failed"),
+        JobStatus(job_id="1", state="PREEMPTED", category="failed"),
+        JobStatus(job_id="1", state="CANCELLED", category="cancelled"),
+        JobStatus(job_id="1", state="FAILED", category="failed", exit_code="1:0"),
+        JobStatus(job_id="1", state="RUNNING", category="running"),
+    ],
+)
+def test_other_ends_are_not_limits(status):
+    assert stopped_by_limit(status) is None
+
+
+def test_timeout_resubmits_resumes_that_many_times(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+
+    js = make_jobserver(db_path, wdir)
+    js._sections["molssi10"].timeout_resubmits = 2
+    _track(js, wdir, resubmit_count=1)
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="TIMEOUT", category="failed"
+    )
+    js.check_for_finished_jobs()
+    assert len(js._backends["molssi10"].submitted) == 1  # the second resume
+    assert "export SEAMM_RESUME=1\n" in js._backends["molssi10"].submitted[0]
+    assert get_job(db_path, 1)[1]["resubmit_count"] == 2
+
+    # The third time limit: no more
+    js._backends["molssi10"].statuses["100"] = JobStatus(
+        job_id="100", state="TIMEOUT", category="failed"
+    )
+    js.check_for_finished_jobs()
+    assert len(js._backends["molssi10"].submitted) == 1
+    assert get_job(db_path, 1)[0] == "error"
+
+
+def test_timeout_resubmits_do_not_cover_running_out_of_memory(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+
+    js = make_jobserver(db_path, wdir)
+    js._sections["molssi10"].timeout_resubmits = 2
+    _track(js, wdir)
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="OUT_OF_MEMORY", category="failed"
+    )
+    js.check_for_finished_jobs()
+    assert js._backends["molssi10"].submitted == []
+    assert get_job(db_path, 1)[0] == "error"
+
+
+def test_timeout_resubmits_capped_by_max_resubmits(db_path, tmp_path):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+
+    js = make_jobserver(db_path, wdir, max_resubmits=1)
+    js._sections["molssi10"].timeout_resubmits = 5
+    _track(js, wdir, resubmit_count=1)
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="TIMEOUT", category="failed"
+    )
+    js.check_for_finished_jobs()
+    assert js._backends["molssi10"].submitted == []
+    assert get_job(db_path, 1)[0] == "error"
