@@ -73,6 +73,10 @@ see "Multiple queues" below) this JobServer instance can route jobs to:
     # how many times to resubmit a job SLURM lost track of (see below)
     # before giving up and marking it "error"
     max_resubmits = 3
+    # how many times to resubmit a job that reached its time limit, to
+    # resume from its checkpoint (default 0: marked "error", so the time
+    # limit caps what the job spends); at most max_resubmits
+    timeout_resubmits = 0
     # seconds between polls of the queue's state (default 60)
     poll_interval = 60
     # raw shell commands run at the top of the generated sbatch script,
@@ -204,13 +208,24 @@ the JobServer:
    ``submitted`` and ``started`` it holds while a job is queued or running say
    nothing about how it ended: a job killed part way (out of walltime, a lost
    node) still has one of them.
-2. Otherwise resubmits, up to ``max_resubmits`` times, in the same directory,
-   with ``SEAMM_RESUME=1`` in the batch script, so the flowchart resumes from its
-   checkpoint at the first step (or Loop iteration) it had not finished rather
-   than starting over (seamm_exec 2026.10.4.1 and later; an older one starts from
-   the top, reusing its finished calculations). Until the cluster's SEAMM is that
-   new, a low ``max_resubmits`` limits the cost of reruns from the top.
-3. Beyond the cap, gives up and marks the job ``error``.
+2. Otherwise, if the queue stopped the job at a limit -- it reached its time
+   limit (SLURM ``TIMEOUT`` or ``DEADLINE``, PBS's walltime kill) or ran out of
+   memory (``OUT_OF_MEMORY``) -- marks it ``error`` without resubmitting it: the
+   same request would stop the same way, and a time limit could not otherwise
+   cap what a job spends. The log and ``job_data.json`` (``stopped``) give the
+   reason. Such a job can be resumed by hand, with more time or memory, from the
+   last step it finished. A queue whose time limit is deliberately shorter than
+   its jobs sets ``timeout_resubmits``: a job that reached its time limit is then
+   resubmitted to resume, that many times (at most ``max_resubmits``). Running
+   out of memory is never resubmitted.
+3. Otherwise -- the job is no longer known to the queue, or ended another way
+   (a failed node, preemption, a cancellation) -- resubmits, up to
+   ``max_resubmits`` times, in the same directory, with ``SEAMM_RESUME=1`` in the
+   batch script, so the flowchart resumes from its checkpoint at the first step
+   (or Loop iteration) it had not finished rather than starting over (seamm_exec
+   2026.10.4.1 and later; an older one starts from the top, reusing its finished
+   calculations).
+4. Beyond the cap, gives up and marks the job ``error``.
 
 For a queue with ``transport = ssh``, the job ran in its remote directory, which has
 its latest files, so a resubmitted or resumed job continues there: the local copy is
@@ -223,11 +238,13 @@ other jobs, so one large job cannot hold up the rest.
 The same holds for a PBS queue, which loses jobs the same ways SLURM does (a
 failed node, a ``qdel`` by an administrator, the walltime), and for the TaskServer
 (``scheduler = seamm``), whose job is lost when its runner stops (the machine
-rebooted). **How many resubmits:** 3 for a production section -- enough for a lost
-node or two and a walltime that was a little short -- and more only for a section
+rebooted). **How many resubmits:** ``max_resubmits = 3`` for a production section
+-- enough for a lost node or two -- and ``timeout_resubmits`` only for a section
 whose walltime is deliberately shorter than its jobs (a job then needs one resubmit
 per walltime it runs). Each resubmit resumes from the checkpoint, so the cost of
-one is the unfinished step, not the whole job. PBS must keep finished jobs in its
+one is the unfinished step, not the whole job; but a job whose walltime is too short
+for one of its steps reruns that step each time, which is why time limits are not
+resubmitted by default. PBS must keep finished jobs in its
 history long enough to be seen after a long absence of the JobServer (``qmgr -c
 "set server job_history_enable = True"`` and ``job_history_duration`` of a week or
 more): a job finished but gone from ``qstat -x`` would be taken as lost.
