@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.11.11 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.11.14 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=83e1bca7"></script>
+    <script src="_static/documentation_options.js?v=dbe82219"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.11.11" />
+  <meta name="docsearch:version" content="2026.11.14" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -506,6 +506,20 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.11.14 – Bugfix: jobs that reached their time limit were resubmitted</dt><dd><ul class="simple">
+<li><p>A job that reached its time limit (SLURM <code class="docutils literal notranslate"><span class="pre">TIMEOUT</span></code>) or ran out of memory was
+resubmitted, up to <code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code> times, and logged as “SLURM lost track of
+it”. Each rerun spent as much again, so a time limit could not cap a job’s
+cost. Such a job is now marked <code class="docutils literal notranslate"><span class="pre">error</span></code> with the reason in the log and in
+<code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> (<code class="docutils literal notranslate"><span class="pre">stopped</span></code>); it can be resumed by hand with more time or
+memory.</p></li>
+<li><p>A queue whose time limit is deliberately shorter than its jobs can set
+<code class="docutils literal notranslate"><span class="pre">timeout_resubmits</span></code> (needs seamm-scheduler 2026.11.14): a job that reached
+its time limit is then resubmitted to resume, that many times.</p></li>
+<li><p>When a job is resubmitted, the log now says why (the state it ended in, or that
+the queue no longer knows it).</p></li>
+</ul>
+</dd>
 <dt>2026.11.11 – Hooks for plug-ins when a job ends</dt><dd><ul class="simple">
 <li><p>When a job ends and its files are back on this host, the JobServer calls the
 hooks installed packages register under

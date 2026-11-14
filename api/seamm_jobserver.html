@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.11.11 documentation</title>
+    <title>seamm_jobserver package &#8212; SEAMM Jobserver 2026.11.14 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=83e1bca7"></script>
+    <script src="../_static/documentation_options.js?v=dbe82219"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.11.11" />
+  <meta name="docsearch:version" content="2026.11.14" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -756,6 +756,31 @@ output to the stream.</p>
 <dd><p>Helper routine to run the JobServer from the command-line</p>
 </dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="seamm_jobserver.jobserver.stopped_by_limit">
+<span class="sig-prename descclassname"><span class="pre">seamm_jobserver.jobserver.</span></span><span class="sig-name descname"><span class="pre">stopped_by_limit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">status</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/seamm_jobserver/jobserver.html#stopped_by_limit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#seamm_jobserver.jobserver.stopped_by_limit" title="Link to this definition">#</a></dt>
+<dd><p>Why a job that ended in the queue would only stop the same way again if
+resubmitted, or None.</p>
+<p>A job that reached its time limit (SLURM TIMEOUT or DEADLINE, PBS’s
+walltime kill) or ran out of memory (OUT_OF_MEMORY) asked for too little.
+Resubmitting it with the same request spends as much again, so a time
+limit could not cap a job’s cost: one job with a 50-minute limit ran four
+times, about four times what was meant, before it was given up.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>status</strong> (<em>seamm_scheduler.scheduler.JobStatus</em><em> or </em><em>None</em>) – The job’s last status from the queue; None if the queue no longer
+knows the job.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A short reason, such as “it reached its time limit”, or None if the
+job was not stopped by a limit (it may be worth resubmitting).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>str or None</p>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
 <section id="module-seamm_jobserver">
 <span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-seamm_jobserver" title="Link to this heading">#</a></h2>
@@ -844,6 +869,7 @@ JobServer for the SEAMM environment.</p>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.humanize"><code class="docutils literal notranslate"><span class="pre">humanize()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.run"><code class="docutils literal notranslate"><span class="pre">run()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#seamm_jobserver.jobserver.stopped_by_limit"><code class="docutils literal notranslate"><span class="pre">stopped_by_limit()</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-seamm_jobserver">Module contents</a></li>

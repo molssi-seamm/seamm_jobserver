@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.11.11 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.11.14 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=83e1bca7"></script>
+    <script src="../_static/documentation_options.js?v=dbe82219"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.11.11" />
+  <meta name="docsearch:version" content="2026.11.14" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -567,6 +567,10 @@ see “Multiple queues” below) this JobServer instance can route jobs to:</p>
 <span class="c1"># how many times to resubmit a job SLURM lost track of (see below)</span>
 <span class="c1"># before giving up and marking it "error"</span>
 <span class="na">max_resubmits</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">3</span>
+<span class="c1"># how many times to resubmit a job that reached its time limit, to</span>
+<span class="c1"># resume from its checkpoint (default 0: marked "error", so the time</span>
+<span class="c1"># limit caps what the job spends); at most max_resubmits</span>
+<span class="na">timeout_resubmits</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">0</span>
 <span class="c1"># seconds between polls of the queue's state (default 60)</span>
 <span class="na">poll_interval</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">60</span>
 <span class="c1"># raw shell commands run at the top of the generated sbatch script,</span>
@@ -688,12 +692,23 @@ the JobServer:</p>
 <code class="docutils literal notranslate"><span class="pre">submitted</span></code> and <code class="docutils literal notranslate"><span class="pre">started</span></code> it holds while a job is queued or running say
 nothing about how it ended: a job killed part way (out of walltime, a lost
 node) still has one of them.</p></li>
-<li><p>Otherwise resubmits, up to <code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code> times, in the same directory,
-with <code class="docutils literal notranslate"><span class="pre">SEAMM_RESUME=1</span></code> in the batch script, so the flowchart resumes from its
-checkpoint at the first step (or Loop iteration) it had not finished rather
-than starting over (seamm_exec 2026.10.4.1 and later; an older one starts from
-the top, reusing its finished calculations). Until the cluster’s SEAMM is that
-new, a low <code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code> limits the cost of reruns from the top.</p></li>
+<li><p>Otherwise, if the queue stopped the job at a limit – it reached its time
+limit (SLURM <code class="docutils literal notranslate"><span class="pre">TIMEOUT</span></code> or <code class="docutils literal notranslate"><span class="pre">DEADLINE</span></code>, PBS’s walltime kill) or ran out of
+memory (<code class="docutils literal notranslate"><span class="pre">OUT_OF_MEMORY</span></code>) – marks it <code class="docutils literal notranslate"><span class="pre">error</span></code> without resubmitting it: the
+same request would stop the same way, and a time limit could not otherwise
+cap what a job spends. The log and <code class="docutils literal notranslate"><span class="pre">job_data.json</span></code> (<code class="docutils literal notranslate"><span class="pre">stopped</span></code>) give the
+reason. Such a job can be resumed by hand, with more time or memory, from the
+last step it finished. A queue whose time limit is deliberately shorter than
+its jobs sets <code class="docutils literal notranslate"><span class="pre">timeout_resubmits</span></code>: a job that reached its time limit is then
+resubmitted to resume, that many times (at most <code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code>). Running
+out of memory is never resubmitted.</p></li>
+<li><p>Otherwise – the job is no longer known to the queue, or ended another way
+(a failed node, preemption, a cancellation) – resubmits, up to
+<code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code> times, in the same directory, with <code class="docutils literal notranslate"><span class="pre">SEAMM_RESUME=1</span></code> in the
+batch script, so the flowchart resumes from its checkpoint at the first step
+(or Loop iteration) it had not finished rather than starting over (seamm_exec
+2026.10.4.1 and later; an older one starts from the top, reusing its finished
+calculations).</p></li>
 <li><p>Beyond the cap, gives up and marks the job <code class="docutils literal notranslate"><span class="pre">error</span></code>.</p></li>
 </ol>
 <p>For a queue with <code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code>, the job ran in its remote directory, which has
@@ -706,11 +721,13 @@ other jobs, so one large job cannot hold up the rest.</p>
 <p>The same holds for a PBS queue, which loses jobs the same ways SLURM does (a
 failed node, a <code class="docutils literal notranslate"><span class="pre">qdel</span></code> by an administrator, the walltime), and for the TaskServer
 (<code class="docutils literal notranslate"><span class="pre">scheduler</span> <span class="pre">=</span> <span class="pre">seamm</span></code>), whose job is lost when its runner stops (the machine
-rebooted). <strong>How many resubmits:</strong> 3 for a production section – enough for a lost
-node or two and a walltime that was a little short – and more only for a section
+rebooted). <strong>How many resubmits:</strong> <code class="docutils literal notranslate"><span class="pre">max_resubmits</span> <span class="pre">=</span> <span class="pre">3</span></code> for a production section
+– enough for a lost node or two – and <code class="docutils literal notranslate"><span class="pre">timeout_resubmits</span></code> only for a section
 whose walltime is deliberately shorter than its jobs (a job then needs one resubmit
 per walltime it runs). Each resubmit resumes from the checkpoint, so the cost of
-one is the unfinished step, not the whole job. PBS must keep finished jobs in its
+one is the unfinished step, not the whole job; but a job whose walltime is too short
+for one of its steps reruns that step each time, which is why time limits are not
+resubmitted by default. PBS must keep finished jobs in its
 history long enough to be seen after a long absence of the JobServer (<code class="docutils literal notranslate"><span class="pre">qmgr</span> <span class="pre">-c</span>
 <span class="pre">&quot;set</span> <span class="pre">server</span> <span class="pre">job_history_enable</span> <span class="pre">=</span> <span class="pre">True&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">job_history_duration</span></code> of a week or
 more): a job finished but gone from <code class="docutils literal notranslate"><span class="pre">qstat</span> <span class="pre">-x</span></code> would be taken as lost.</p>

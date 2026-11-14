@@ -6,7 +6,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.11.11 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.11.14 documentation</title>
   
   
   
@@ -47,7 +47,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=83e1bca7"></script>
+    <script src="../../_static/documentation_options.js?v=dbe82219"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -61,7 +61,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.11.11" />
+  <meta name="docsearch:version" content="2026.11.14" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -588,6 +588,46 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="n">RESUME_ENVIRONMENT</span> <span class="o">=</span> <span class="s2">"SEAMM_RESUME"</span>
 
 
+<div class="viewcode-block" id="stopped_by_limit">
+<a class="viewcode-back" href="../../api/seamm_jobserver.html#seamm_jobserver.jobserver.stopped_by_limit">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">stopped_by_limit</span><span class="p">(</span><span class="n">status</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Why a job that ended in the queue would only stop the same way again if</span>
+<span class="sd">    resubmitted, or None.</span>
+
+<span class="sd">    A job that reached its time limit (SLURM TIMEOUT or DEADLINE, PBS's</span>
+<span class="sd">    walltime kill) or ran out of memory (OUT_OF_MEMORY) asked for too little.</span>
+<span class="sd">    Resubmitting it with the same request spends as much again, so a time</span>
+<span class="sd">    limit could not cap a job's cost: one job with a 50-minute limit ran four</span>
+<span class="sd">    times, about four times what was meant, before it was given up.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    status : seamm_scheduler.scheduler.JobStatus or None</span>
+<span class="sd">        The job's last status from the queue; None if the queue no longer</span>
+<span class="sd">        knows the job.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    str or None</span>
+<span class="sd">        A short reason, such as "it reached its time limit", or None if the</span>
+<span class="sd">        job was not stopped by a limit (it may be worth resubmitting).</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">status</span><span class="o">.</span><span class="n">is_terminal</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">state</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+    <span class="n">timed_out</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="s2">"timed_out"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">timed_out</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># an older seamm_scheduler</span>
+        <span class="n">timed_out</span> <span class="o">=</span> <span class="n">state</span> <span class="o">==</span> <span class="s2">"TIMEOUT"</span>
+    <span class="k">if</span> <span class="n">timed_out</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">"it reached its time limit"</span>
+    <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="s2">"DEADLINE"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">"it reached its deadline"</span>
+    <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="s2">"OUT_OF_MEMORY"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">"it ran out of memory"</span>
+    <span class="k">return</span> <span class="kc">None</span></div>
+
+
+
 <div class="viewcode-block" id="JobServer">
 <a class="viewcode-back" href="../../api/seamm_jobserver.html#seamm_jobserver.jobserver.JobServer">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">JobServer</span><span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">MutableMapping</span><span class="p">):</span>
@@ -981,7 +1021,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"running"</span><span class="p">:</span>
                 <span class="n">resubmitted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_or_resubmit_slurm_job</span><span class="p">(</span>
-                    <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"resubmit_count"</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                    <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"resubmit_count"</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">status</span><span class="o">=</span><span class="n">status</span>
                 <span class="p">)</span>
                 <span class="k">if</span> <span class="n">resubmitted</span><span class="p">:</span>
                     <span class="c1"># _start_job_slurm already replaced self._jobs[job_id]/</span>
@@ -1343,7 +1383,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="k">finally</span><span class="p">:</span>
             <span class="n">lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_finalize_or_resubmit_slurm_job</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">resubmit_count</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_finalize_or_resubmit_slurm_job</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">resubmit_count</span><span class="p">,</span> <span class="n">status</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Finalize a SLURM job's datastore status now that SLURM reports it</span>
 <span class="sd">        terminal (or has no record of it at all), or resubmit it if there's</span>
 <span class="sd">        nothing yet to finalize from.</span>
@@ -1374,6 +1416,28 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <span class="sd">        to resubmitting, up to the queue's ``max_resubmits``, since</span>
 <span class="sd">        flowcharts checkpoint completed steps and safely resume; beyond the</span>
 <span class="sd">        cap, gives up and marks the job ``error``.</span>
+
+<span class="sd">        Except for a job the queue stopped at a limit (see</span>
+<span class="sd">        :func:`stopped_by_limit`): it reached its time limit or ran out of</span>
+<span class="sd">        memory, and a resubmission with the same request would only stop</span>
+<span class="sd">        the same way, so it is marked ``error`` straight away and the reason</span>
+<span class="sd">        logged and written to ``job_data.json``. It can be resumed, with a</span>
+<span class="sd">        larger request, from its last completed step. A queue that wants</span>
+<span class="sd">        jobs to carry on across time limits sets ``timeout_resubmits``: a</span>
+<span class="sd">        job that reached its time limit is then resubmitted to resume, that</span>
+<span class="sd">        many times (at most ``max_resubmits``).</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        job_id : int</span>
+<span class="sd">            The SEAMM job id.</span>
+<span class="sd">        data : dict</span>
+<span class="sd">            The job's tracking data.</span>
+<span class="sd">        resubmit_count : int</span>
+<span class="sd">            How many times the job has been resubmitted already.</span>
+<span class="sd">        status : seamm_scheduler.scheduler.JobStatus, optional</span>
+<span class="sd">            The job's last status from the queue; None if the queue no</span>
+<span class="sd">            longer knows the job (or it was never submitted).</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
@@ -1410,11 +1474,57 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
             <span class="k">return</span> <span class="kc">False</span>
 
+        <span class="n">slurm_id</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"slurm_job_id"</span><span class="p">)</span>
+        <span class="n">limit</span> <span class="o">=</span> <span class="n">stopped_by_limit</span><span class="p">(</span><span class="n">status</span><span class="p">)</span>
+        <span class="n">timeout_resubmits</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="s2">"timeout_resubmits"</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">,</span> <span class="n">section</span><span class="o">.</span><span class="n">max_resubmits</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="n">limit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="s2">"time limit"</span> <span class="ow">in</span> <span class="n">limit</span>
+            <span class="ow">and</span> <span class="n">resubmit_count</span> <span class="o">&lt;</span> <span class="n">timeout_resubmits</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (slurm_job_id=</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">) ended in state "</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">status</span><span class="o">.</span><span class="n">state</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2">. Resubmitting it to resume from its "</span>
+                <span class="sa">f</span><span class="s2">"checkpoint (attempt </span><span class="si">{</span><span class="n">resubmit_count</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">timeout_resubmits</span><span class="si">}</span><span class="s2">, "</span>
+                <span class="s2">"timeout_resubmits)."</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_start_job_slurm</span><span class="p">(</span>
+                <span class="n">job_id</span><span class="p">,</span>
+                <span class="n">wdir</span><span class="p">,</span>
+                <span class="n">data</span><span class="p">[</span><span class="s2">"cmdline"</span><span class="p">],</span>
+                <span class="n">queue</span><span class="p">,</span>
+                <span class="n">resubmit_count</span><span class="o">=</span><span class="n">resubmit_count</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="n">slurm_overrides</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"slurm_overrides"</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">limit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2"> (slurm_job_id=</span><span class="si">{</span><span class="n">slurm_id</span><span class="si">}</span><span class="s2">) ended in state "</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">status</span><span class="o">.</span><span class="n">state</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2">. It is not resubmitted, since it would "</span>
+                <span class="s2">"stop the same way; it can be resumed with a larger request "</span>
+                <span class="s2">"(or set timeout_resubmits for the queue to resume after a time "</span>
+                <span class="s2">"limit)."</span>
+            <span class="p">)</span>
+            <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"queue"</span><span class="p">:</span> <span class="n">queue</span><span class="p">,</span> <span class="s2">"stopped"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">status</span><span class="o">.</span><span class="n">state</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2">"</span><span class="p">}</span>
+            <span class="k">if</span> <span class="n">slurm_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">extra</span><span class="p">[</span><span class="s2">"slurm_job_id"</span><span class="p">]</span> <span class="o">=</span> <span class="n">slurm_id</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_annotate_job_data</span><span class="p">(</span><span class="n">wdir</span><span class="p">,</span> <span class="n">extra</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="s2">"error"</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">why</span> <span class="o">=</span> <span class="s2">"SLURM lost track of it"</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">why</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"it ended in state </span><span class="si">{</span><span class="n">status</span><span class="o">.</span><span class="n">state</span><span class="si">}</span><span class="s2">"</span>
+
         <span class="n">max_resubmits</span> <span class="o">=</span> <span class="n">section</span><span class="o">.</span><span class="n">max_resubmits</span>
         <span class="k">if</span> <span class="n">resubmit_count</span> <span class="o">&gt;=</span> <span class="n">max_resubmits</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: giving up after </span><span class="si">{</span><span class="n">resubmit_count</span><span class="si">}</span><span class="s2"> resubmit(s) "</span>
-                <span class="s2">"(SLURM lost track of it and no job_data.json was written)."</span>
+                <span class="sa">f</span><span class="s2">"(</span><span class="si">{</span><span class="n">why</span><span class="si">}</span><span class="s2"> and no job_data.json was written)."</span>
             <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="s2">"error"</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -1422,7 +1532,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: resubmitting (attempt </span><span class="si">{</span><span class="n">resubmit_count</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/"</span>
-            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">max_resubmits</span><span class="si">}</span><span class="s2">)."</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">max_resubmits</span><span class="si">}</span><span class="s2">); </span><span class="si">{</span><span class="n">why</span><span class="si">}</span><span class="s2"> and no job_data.json was written."</span>
         <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_start_job_slurm</span><span class="p">(</span>
             <span class="n">job_id</span><span class="p">,</span>
@@ -2356,6 +2466,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <span class="s2">"slurm_overrides"</span><span class="p">:</span> <span class="n">slurm_overrides</span><span class="p">,</span>
                 <span class="p">},</span>
                 <span class="n">resubmit_count</span><span class="p">,</span>
+                <span class="n">status</span><span class="o">=</span><span class="n">status</span><span class="p">,</span>
             <span class="p">)</span>
 
 <div class="viewcode-block" id="JobServer.start_job">
