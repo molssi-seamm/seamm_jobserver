@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>History &#8212; SEAMM Jobserver 2026.11.14 documentation</title>
+    <title>History &#8212; SEAMM Jobserver 2026.11.20 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="_static/documentation_options.js?v=dbe82219"></script>
+    <script src="_static/documentation_options.js?v=8ac94872"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.11.14" />
+  <meta name="docsearch:version" content="2026.11.20" />
   
     
     <script src="_static/searchtools.js"></script>
@@ -506,6 +506,19 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <section id="history">
 <h1>History<a class="headerlink" href="#history" title="Link to this heading">#</a></h1>
 <dl class="simple">
+<dt>2026.11.20 – Finished jobs no longer leave their directory on the remote host</dt><dd><ul class="simple">
+<li><p>A job run on a remote host (<code class="docutils literal notranslate"><span class="pre">transport</span> <span class="pre">=</span> <span class="pre">ssh</span></code> with <code class="docutils literal notranslate"><span class="pre">remote_root</span></code>) left its
+directory there after its files were copied back, so they piled up: 531 jobs
+and 663,000 files on ARC by 2026-11-20. Once such a job has finished and its
+files are back, the JobServer now removes its remote directory, after
+checking that every file there is here too. A job that failed keeps its
+remote directory, and so does one whose files differ (logged). A
+<code class="docutils literal notranslate"><span class="pre">job_finished</span></code> hook names the files it consumes here (e.g. renames once
+handled) in its <code class="docutils literal notranslate"><span class="pre">consumes</span></code> attribute; they are left out of the check.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">keep_remote_wdir</span> <span class="pre">=</span> <span class="pre">yes</span></code> in a queue’s section keeps them all. Needs
+seamm-scheduler 2026.11.20; with an older one nothing is removed.</p></li>
+</ul>
+</dd>
 <dt>2026.11.14 – Bugfix: jobs that reached their time limit were resubmitted</dt><dd><ul class="simple">
 <li><p>A job that reached its time limit (SLURM <code class="docutils literal notranslate"><span class="pre">TIMEOUT</span></code>) or ran out of memory was
 resubmitted, up to <code class="docutils literal notranslate"><span class="pre">max_resubmits</span></code> times, and logged as “SLURM lost track of

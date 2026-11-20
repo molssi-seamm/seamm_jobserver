@@ -7,7 +7,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>User Guide &#8212; SEAMM Jobserver 2026.11.14 documentation</title>
+    <title>User Guide &#8212; SEAMM Jobserver 2026.11.20 documentation</title>
   
   
   
@@ -48,7 +48,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../_static/documentation_options.js?v=dbe82219"></script>
+    <script src="../_static/documentation_options.js?v=8ac94872"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -64,7 +64,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.11.14" />
+  <meta name="docsearch:version" content="2026.11.20" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -786,6 +786,19 @@ the JobServer reads <code class="docutils literal notranslate"><span class="pre"
 as any other job. A transfer failure at either point is treated as
 transient and retried the next poll cycle, not recorded as the job
 having failed.</p>
+<p>Once a job has <em>finished</em> and its files are back, the JobServer removes its
+directory on the remote host, so that finished jobs do not pile up there. It
+first lists the remote directory and checks that every file in it is in the
+local directory too, with the same size or newer; if any is not, it keeps the
+remote directory and logs which files differ. Files that a plug-in’s
+<code class="docutils literal notranslate"><span class="pre">job_finished</span></code> hook consumes after the copy back (it lists them in the hook’s
+<code class="docutils literal notranslate"><span class="pre">consumes</span></code> attribute, e.g. the Thermochemistry step’s
+<code class="docutils literal notranslate"><span class="pre">harvest_fragments.json</span></code>, renamed once harvested) are left out of that check.
+A job that failed or was killed
+keeps its remote directory, since it may be resumed. To keep every job’s remote
+directory, add <code class="docutils literal notranslate"><span class="pre">keep_remote_wdir</span> <span class="pre">=</span> <span class="pre">yes</span></code> to the section. The check uses GNU
+<code class="docutils literal notranslate"><span class="pre">find</span></code> on the remote host, as on Linux clusters; elsewhere the directory is
+kept, with a warning in the log.</p>
 <p>Referenced input files need no special handling here – a flowchart
 control parameter of type <code class="docutils literal notranslate"><span class="pre">file</span></code> is already staged into the job’s own
 <code class="docutils literal notranslate"><span class="pre">data/</span></code> directory (with its path on the command line rewritten to

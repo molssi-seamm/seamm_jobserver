@@ -6,7 +6,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.11.14 documentation</title>
+    <title>seamm_jobserver.jobserver &#8212; SEAMM Jobserver 2026.11.20 documentation</title>
   
   
   
@@ -47,7 +47,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-PQXXTJ2');</script>
 <!-- End Google Tag Manager -->
 
-    <script src="../../_static/documentation_options.js?v=dbe82219"></script>
+    <script src="../../_static/documentation_options.js?v=8ac94872"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -61,7 +61,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="2026.11.14" />
+  <meta name="docsearch:version" content="2026.11.20" />
   
     
     <script src="../../_static/searchtools.js"></script>
@@ -1383,6 +1383,55 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <span class="k">finally</span><span class="p">:</span>
             <span class="n">lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_remove_remote_in_background</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">remote_wdir</span><span class="p">,</span> <span class="n">wdir</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Remove a finished job's directory on the remote host.</span>
+
+<span class="sd">        Its files were just copied back. The stager checks that every file there</span>
+<span class="sd">        is here too before removing anything, and keeps the directory otherwise</span>
+<span class="sd">        (logged). Files a ``job_finished`` hook consumes here, listed in the</span>
+<span class="sd">        hook's ``consumes`` attribute (patterns), are left out of that check. A</span>
+<span class="sd">        job that failed keeps its remote directory, so is never passed here. Runs</span>
+<span class="sd">        in a worker thread, since removing a large directory over ssh takes a</span>
+<span class="sd">        while (one job held 159,000 files).</span>
+
+<span class="sd">        Returns the thread, or None if the stager cannot remove directories</span>
+<span class="sd">        (seamm-scheduler before 2026.11.20).</span>
+<span class="sd">        """</span>
+        <span class="n">remove</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_stagers</span><span class="p">[</span><span class="n">queue</span><span class="p">],</span> <span class="s2">"remove_remote"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">remove</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="c1"># Files the job_finished hooks consume here, e.g. a marker renamed once</span>
+        <span class="c1"># handled: not expected to be the same here as there.</span>
+        <span class="n">ignore</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">hook</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_finished_hooks</span><span class="p">():</span>
+            <span class="n">ignore</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s2">"consumes"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">())</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">():</span>
+            <span class="n">lock</span> <span class="o">=</span> <span class="n">fasteners</span><span class="o">.</span><span class="n">InterProcessLock</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">wdir</span><span class="p">)</span> <span class="o">/</span> <span class="n">STAGE_LOCK_FILENAME</span><span class="p">))</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">lock</span><span class="o">.</span><span class="n">acquire</span><span class="p">(</span><span class="n">blocking</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: kept </span><span class="si">{</span><span class="n">remote_wdir</span><span class="si">}</span><span class="s2">: could not acquire the "</span>
+                        <span class="sa">f</span><span class="s2">"stage lock for </span><span class="si">{</span><span class="n">wdir</span><span class="si">}</span><span class="s2">."</span>
+                    <span class="p">)</span>
+                    <span class="k">return</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">removed</span> <span class="o">=</span> <span class="n">remove</span><span class="p">(</span><span class="n">remote_wdir</span><span class="p">,</span> <span class="n">wdir</span><span class="p">,</span> <span class="n">ignore</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">ignore</span><span class="p">))</span>
+                <span class="k">finally</span><span class="p">:</span>
+                    <span class="n">lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: kept </span><span class="si">{</span><span class="n">remote_wdir</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+                <span class="k">return</span>
+            <span class="k">if</span> <span class="n">removed</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Job </span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">: removed </span><span class="si">{</span><span class="n">remote_wdir</span><span class="si">}</span><span class="s2">, since all its files are "</span>
+                    <span class="sa">f</span><span class="s2">"in </span><span class="si">{</span><span class="n">wdir</span><span class="si">}</span><span class="s2">."</span>
+                <span class="p">)</span>
+
+        <span class="n">thread</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">run</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">"remove-</span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">thread</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_finalize_or_resubmit_slurm_job</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">resubmit_count</span><span class="p">,</span> <span class="n">status</span><span class="o">=</span><span class="kc">None</span>
     <span class="p">):</span>
@@ -1470,6 +1519,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <span class="bp">self</span><span class="o">.</span><span class="n">_finalize_job_status</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="s2">"finished"</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">successful_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">remote_wdir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span>
+                    <span class="n">section</span><span class="p">,</span> <span class="s2">"keep_remote_wdir"</span><span class="p">,</span> <span class="kc">False</span>
+                <span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_remove_remote_in_background</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">remote_wdir</span><span class="p">,</span> <span class="n">wdir</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">failed_jobs</span> <span class="o">+=</span> <span class="mi">1</span>
             <span class="k">return</span> <span class="kc">False</span>

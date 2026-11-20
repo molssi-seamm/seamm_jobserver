@@ -310,6 +310,20 @@ as any other job. A transfer failure at either point is treated as
 transient and retried the next poll cycle, not recorded as the job
 having failed.
 
+Once a job has *finished* and its files are back, the JobServer removes its
+directory on the remote host, so that finished jobs do not pile up there. It
+first lists the remote directory and checks that every file in it is in the
+local directory too, with the same size or newer; if any is not, it keeps the
+remote directory and logs which files differ. Files that a plug-in's
+``job_finished`` hook consumes after the copy back (it lists them in the hook's
+``consumes`` attribute, e.g. the Thermochemistry step's
+``harvest_fragments.json``, renamed once harvested) are left out of that check.
+A job that failed or was killed
+keeps its remote directory, since it may be resumed. To keep every job's remote
+directory, add ``keep_remote_wdir = yes`` to the section. The check uses GNU
+``find`` on the remote host, as on Linux clusters; elsewhere the directory is
+kept, with a warning in the log.
+
 Referenced input files need no special handling here -- a flowchart
 control parameter of type ``file`` is already staged into the job's own
 ``data/`` directory (with its path on the command line rewritten to
