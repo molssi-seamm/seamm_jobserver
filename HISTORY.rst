@@ -1,6 +1,18 @@
 =======
 History
 =======
+2026.11.20 -- Finished jobs no longer leave their directory on the remote host
+    * A job run on a remote host (``transport = ssh`` with ``remote_root``) left its
+      directory there after its files were copied back, so they piled up: 531 jobs
+      and 663,000 files on ARC by 2026-11-20. Once such a job has finished and its
+      files are back, the JobServer now removes its remote directory, after
+      checking that every file there is here too. A job that failed keeps its
+      remote directory, and so does one whose files differ (logged). A
+      ``job_finished`` hook names the files it consumes here (e.g. renames once
+      handled) in its ``consumes`` attribute; they are left out of the check.
+    * ``keep_remote_wdir = yes`` in a queue's section keeps them all. Needs
+      seamm-scheduler 2026.11.20; with an older one nothing is removed.
+
 2026.11.14 -- Bugfix: jobs that reached their time limit were resubmitted
     * A job that reached its time limit (SLURM ``TIMEOUT``) or ran out of memory was
       resubmitted, up to ``max_resubmits`` times, and logged as "SLURM lost track of

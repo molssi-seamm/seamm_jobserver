@@ -872,6 +872,55 @@ class JobServer(collections.abc.MutableMapping):
         finally:
             lock.release()
 
+    def _remove_remote_in_background(self, job_id, queue, remote_wdir, wdir):
+        """Remove a finished job's directory on the remote host.
+
+        Its files were just copied back. The stager checks that every file there
+        is here too before removing anything, and keeps the directory otherwise
+        (logged). Files a ``job_finished`` hook consumes here, listed in the
+        hook's ``consumes`` attribute (patterns), are left out of that check. A
+        job that failed keeps its remote directory, so is never passed here. Runs
+        in a worker thread, since removing a large directory over ssh takes a
+        while (one job held 159,000 files).
+
+        Returns the thread, or None if the stager cannot remove directories
+        (seamm-scheduler before 2026.11.20).
+        """
+        remove = getattr(self._stagers[queue], "remove_remote", None)
+        if remove is None:
+            return None
+        # Files the job_finished hooks consume here, e.g. a marker renamed once
+        # handled: not expected to be the same here as there.
+        ignore = []
+        for _, hook in self._finished_hooks():
+            ignore.extend(getattr(hook, "consumes", None) or ())
+
+        def run():
+            lock = fasteners.InterProcessLock(str(Path(wdir) / STAGE_LOCK_FILENAME))
+            try:
+                if not lock.acquire(blocking=True, timeout=60):
+                    self.logger.warning(
+                        f"Job {job_id}: kept {remote_wdir}: could not acquire the "
+                        f"stage lock for {wdir}."
+                    )
+                    return
+                try:
+                    removed = remove(remote_wdir, wdir, ignore=tuple(ignore))
+                finally:
+                    lock.release()
+            except Exception as e:
+                self.logger.warning(f"Job {job_id}: kept {remote_wdir}: {e}")
+                return
+            if removed:
+                self.logger.info(
+                    f"Job {job_id}: removed {remote_wdir}, since all its files are "
+                    f"in {wdir}."
+                )
+
+        thread = threading.Thread(target=run, name=f"remove-{job_id}", daemon=True)
+        thread.start()
+        return thread
+
     def _finalize_or_resubmit_slurm_job(
         self, job_id, data, resubmit_count, status=None
     ):
@@ -959,6 +1008,10 @@ class JobServer(collections.abc.MutableMapping):
             self._finalize_job_status(job_id, state)
             if state == "finished":
                 self.successful_jobs += 1
+                if remote_wdir is not None and not getattr(
+                    section, "keep_remote_wdir", False
+                ):
+                    self._remove_remote_in_background(job_id, queue, remote_wdir, wdir)
             else:
                 self.failed_jobs += 1
             return False
