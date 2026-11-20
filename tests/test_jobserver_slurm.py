@@ -55,6 +55,8 @@ class FakeStager:
         self.staged_in = []  # (local_wdir, remote_wdir), in call order
         self.staged_out = []  # (remote_wdir, local_wdir), in call order
         self.fail_stage_out_times = 0
+        self.removed = []  # (remote_wdir, local_wdir) removed
+        self.fail_remove = False
 
     def stage_in(self, local_wdir, remote_wdir):
         self.staged_in.append((local_wdir, remote_wdir))
@@ -65,6 +67,12 @@ class FakeStager:
             self.fail_stage_out_times -= 1
             raise StageError("transient failure")
         self.staged_out.append((remote_wdir, local_wdir))
+
+    def remove_remote(self, remote_wdir, local_wdir):
+        if self.fail_remove:
+            raise StageError("1 file(s) ... are not the same, so it was kept")
+        self.removed.append((remote_wdir, local_wdir))
+        return True
 
 
 class FakeProcess:
@@ -2847,3 +2855,78 @@ def test_timeout_resubmits_capped_by_max_resubmits(db_path, tmp_path):
     js.check_for_finished_jobs()
     assert js._backends["molssi10"].submitted == []
     assert get_job(db_path, 1)[0] == "error"
+
+
+# ---- removing a finished job's remote directory ----------------------------
+
+
+def _join_removals():
+    import threading
+
+    for thread in threading.enumerate():
+        if thread.name.startswith("remove-"):
+            thread.join(timeout=10)
+
+
+def _finished_ssh_job(db_path, tmp_path, state="finished"):
+    wdir = tmp_path / "Job_1"
+    wdir.mkdir()
+    insert_job(db_path, 1, "running", str(wdir))
+    (wdir / "job_data.json").write_text(
+        f'!MolSSI job_data 1.0\n{{"state": "{state}"}}\n'
+    )
+    js = make_ssh_jobserver(db_path)
+    js._jobs[1] = {
+        "mode": "slurm",
+        "slurm_job_id": "42",
+        "wdir": str(wdir),
+        "remote_wdir": "/remote/scratch/Job_1",
+        "cmdline": ["run_from_jobserver"],
+        "resubmit_count": 0,
+    }
+    js._times[1] = {}
+    js._backends["molssi10"].statuses["42"] = JobStatus(
+        job_id="42", state="COMPLETED", category="completed", exit_code="0:0"
+    )
+    return js, wdir
+
+
+def test_finished_ssh_job_remote_wdir_is_removed(db_path, tmp_path):
+    """A finished job's remote directory goes once its files are back
+    (531 had piled up on ARC, 663,000 files, by 2026-11-20)."""
+    js, wdir = _finished_ssh_job(db_path, tmp_path)
+    js.check_for_finished_jobs()
+    _join_removals()
+    assert get_job(db_path, 1)[0] == "finished"
+    assert js._stagers["molssi10"].removed == [("/remote/scratch/Job_1", str(wdir))]
+
+
+def test_failed_ssh_job_keeps_its_remote_wdir(db_path, tmp_path):
+    js, wdir = _finished_ssh_job(db_path, tmp_path, state="error")
+    js.check_for_finished_jobs()
+    _join_removals()
+    assert get_job(db_path, 1)[0] == "error"
+    assert js._stagers["molssi10"].removed == []
+
+
+def test_keep_remote_wdir_setting(db_path, tmp_path):
+    js, wdir = _finished_ssh_job(db_path, tmp_path)
+    js._sections["molssi10"].keep_remote_wdir = True
+    js.check_for_finished_jobs()
+    _join_removals()
+    assert get_job(db_path, 1)[0] == "finished"
+    assert js._stagers["molssi10"].removed == []
+
+
+def test_remote_wdir_kept_when_files_differ(db_path, tmp_path):
+    """The stager refuses (a file there is not here): logged, job still finished."""
+    from unittest import mock
+
+    js, wdir = _finished_ssh_job(db_path, tmp_path)
+    js.logger = mock.Mock()
+    js._stagers["molssi10"].fail_remove = True
+    js.check_for_finished_jobs()
+    _join_removals()
+    assert get_job(db_path, 1)[0] == "finished"
+    warnings = " ".join(str(c.args[0]) for c in js.logger.warning.call_args_list)
+    assert "kept /remote/scratch/Job_1" in warnings
