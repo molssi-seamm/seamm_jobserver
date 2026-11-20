@@ -68,10 +68,11 @@ class FakeStager:
             raise StageError("transient failure")
         self.staged_out.append((remote_wdir, local_wdir))
 
-    def remove_remote(self, remote_wdir, local_wdir):
+    def remove_remote(self, remote_wdir, local_wdir, ignore=()):
         if self.fail_remove:
             raise StageError("1 file(s) ... are not the same, so it was kept")
         self.removed.append((remote_wdir, local_wdir))
+        self.ignored = ignore
         return True
 
 
@@ -2930,3 +2931,20 @@ def test_remote_wdir_kept_when_files_differ(db_path, tmp_path):
     assert get_job(db_path, 1)[0] == "finished"
     warnings = " ".join(str(c.args[0]) for c in js.logger.warning.call_args_list)
     assert "kept /remote/scratch/Job_1" in warnings
+
+
+def test_remote_check_leaves_out_what_hooks_consume(db_path, tmp_path):
+    """The Thermochemistry hook renames harvest_fragments.json here after the copy
+    back; a hook names such files in its ``consumes`` so the check skips them."""
+
+    def harvest(**kwargs):
+        pass
+
+    harvest.consumes = ("harvest_fragments.json",)
+    js, wdir = _finished_ssh_job(db_path, tmp_path)
+    js._job_finished_hooks = [("harvest", harvest), ("other", lambda **kw: None)]
+    js.check_for_finished_jobs()
+    _join_removals()
+    stager = js._stagers["molssi10"]
+    assert stager.removed == [("/remote/scratch/Job_1", str(wdir))]
+    assert stager.ignored == ("harvest_fragments.json",)

@@ -314,7 +314,11 @@ Once a job has *finished* and its files are back, the JobServer removes its
 directory on the remote host, so that finished jobs do not pile up there. It
 first lists the remote directory and checks that every file in it is in the
 local directory too, with the same size or newer; if any is not, it keeps the
-remote directory and logs which files differ. A job that failed or was killed
+remote directory and logs which files differ. Files that a plug-in's
+``job_finished`` hook consumes after the copy back (it lists them in the hook's
+``consumes`` attribute, e.g. the Thermochemistry step's
+``harvest_fragments.json``, renamed once harvested) are left out of that check.
+A job that failed or was killed
 keeps its remote directory, since it may be resumed. To keep every job's remote
 directory, add ``keep_remote_wdir = yes`` to the section. The check uses GNU
 ``find`` on the remote host, as on Linux clusters; elsewhere the directory is

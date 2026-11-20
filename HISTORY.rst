@@ -7,7 +7,9 @@ History
       and 663,000 files on ARC by 2026-11-20. Once such a job has finished and its
       files are back, the JobServer now removes its remote directory, after
       checking that every file there is here too. A job that failed keeps its
-      remote directory, and so does one whose files differ (logged).
+      remote directory, and so does one whose files differ (logged). A
+      ``job_finished`` hook names the files it consumes here (e.g. renames once
+      handled) in its ``consumes`` attribute; they are left out of the check.
     * ``keep_remote_wdir = yes`` in a queue's section keeps them all. Needs
       seamm-scheduler 2026.11.20; with an older one nothing is removed.
 

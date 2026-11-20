@@ -877,9 +877,11 @@ class JobServer(collections.abc.MutableMapping):
 
         Its files were just copied back. The stager checks that every file there
         is here too before removing anything, and keeps the directory otherwise
-        (logged). A job that failed keeps its remote directory, so is never
-        passed here. Runs in a worker thread, since removing a large directory
-        over ssh takes a while (one job held 159,000 files).
+        (logged). Files a ``job_finished`` hook consumes here, listed in the
+        hook's ``consumes`` attribute (patterns), are left out of that check. A
+        job that failed keeps its remote directory, so is never passed here. Runs
+        in a worker thread, since removing a large directory over ssh takes a
+        while (one job held 159,000 files).
 
         Returns the thread, or None if the stager cannot remove directories
         (seamm-scheduler before 2026.11.20).
@@ -887,6 +889,11 @@ class JobServer(collections.abc.MutableMapping):
         remove = getattr(self._stagers[queue], "remove_remote", None)
         if remove is None:
             return None
+        # Files the job_finished hooks consume here, e.g. a marker renamed once
+        # handled: not expected to be the same here as there.
+        ignore = []
+        for _, hook in self._finished_hooks():
+            ignore.extend(getattr(hook, "consumes", None) or ())
 
         def run():
             lock = fasteners.InterProcessLock(str(Path(wdir) / STAGE_LOCK_FILENAME))
@@ -898,7 +905,7 @@ class JobServer(collections.abc.MutableMapping):
                     )
                     return
                 try:
-                    removed = remove(remote_wdir, wdir)
+                    removed = remove(remote_wdir, wdir, ignore=tuple(ignore))
                 finally:
                     lock.release()
             except Exception as e:
